@@ -29,6 +29,7 @@ export function ReportsPage() {
   const [counts, setCounts] = useState<CountsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentReport, setCurrentReport] = useState<ReportType>(null);
+  const [salesDate, setSalesDate] = useState<string>('');
 
   useEffect(() => {
     if (currentRanch) {
@@ -170,15 +171,22 @@ export function ReportsPage() {
 
   if (currentReport && animals.length > 0) {
     const presentAnimals = animals.filter(a => a.status === 'PRESENT');
-    const soldAnimals = animals.filter(a => a.status === 'SOLD');
+    const allSoldAnimals = animals.filter(a => a.status === 'SOLD');
+    const soldAnimals = salesDate
+      ? allSoldAnimals.filter(a => a.exit_date === salesDate)
+      : allSoldAnimals;
     const calvesReport = generateCalvesByMotherReport(animals);
 
     return (
       <Layout currentPage="reports">
         <div className="space-y-6">
-          <div className="flex items-center justify-between no-print">
+          <div className="space-y-4 no-print">
+            <div className="flex items-center justify-between">
             <button
-              onClick={() => setCurrentReport(null)}
+              onClick={() => {
+                setCurrentReport(null);
+                setSalesDate('');
+              }}
               className="text-green-600 hover:text-green-700 font-medium"
             >
               ← Back to Reports
@@ -204,6 +212,34 @@ export function ReportsPage() {
                 Export CSV
               </button>
             </div>
+            </div>
+
+            {currentReport === 'sales' && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Filter by Sale Date (optional)
+                </label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="date"
+                    value={salesDate}
+                    onChange={(e) => setSalesDate(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  {salesDate && (
+                    <button
+                      onClick={() => setSalesDate('')}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <span className="text-sm text-gray-600">
+                    {salesDate ? `Showing sales on ${salesDate}` : 'Showing all sold animals'}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div id="printable-report" className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -253,17 +289,44 @@ export function ReportsPage() {
 
               {currentReport === 'inventory' && (
                 <ReportSection>
-                  <ReportTable
-                    headers={['Tag', 'Name', 'Sex', 'Age', 'Birth Date', 'Description']}
-                    rows={presentAnimals.map(a => [
-                      a.tag_number || '-',
-                      a.name || '-',
-                      a.sex,
-                      calculateAge(a.birth_date),
-                      formatDateForDisplay(a.birth_date),
-                      a.description || '-',
-                    ])}
-                  />
+                  {presentAnimals.map(animal => {
+                    const animalMedical = medicalRecords.filter(m => m.animal_id === animal.id);
+                    return (
+                      <div key={animal.id} className="mb-4 border-b border-gray-100 pb-3 last:border-0">
+                        <div className="grid grid-cols-6 gap-2 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-700">Tag:</span> {animal.tag_number || '-'}
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Name:</span> {animal.name || '-'}
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Sex:</span> {animal.sex}
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Age:</span> {calculateAge(animal.birth_date)}
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Birth:</span> {formatDateForDisplay(animal.birth_date)}
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Desc:</span> {animal.description || '-'}
+                          </div>
+                        </div>
+                        {animalMedical.length > 0 && (
+                          <div className="ml-6 mt-1 space-y-0.5">
+                            {animalMedical
+                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                              .map((m, idx) => (
+                                <div key={idx} className="text-xs text-gray-600">
+                                  <span className="font-medium">{formatDateForDisplay(m.date)}:</span> {m.description}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </ReportSection>
               )}
 
@@ -282,22 +345,60 @@ export function ReportsPage() {
               )}
 
               {currentReport === 'sales' && (
-                <ReportSection>
-                  <ReportTable
-                    headers={['Sale Date', 'Tag', 'Name', 'Sex', 'Age at Sale', 'Description']}
-                    rows={soldAnimals
-                      .filter(a => a.exit_date)
-                      .sort((a, b) => new Date(b.exit_date!).getTime() - new Date(a.exit_date!).getTime())
-                      .map(a => [
-                        formatDateForDisplay(a.exit_date),
-                        a.tag_number || '-',
-                        a.name || '-',
-                        a.sex,
-                        calculateAge(a.birth_date),
-                        a.description || '-',
-                      ])}
-                  />
-                </ReportSection>
+                <>
+                  {soldAnimals.length === 0 ? (
+                    <ReportSection>
+                      <div className="text-center py-8 text-gray-600">
+                        {salesDate ? `No animals sold on ${salesDate}` : 'No sold animals found'}
+                      </div>
+                    </ReportSection>
+                  ) : (
+                    soldAnimals
+                      .sort((a, b) => new Date(b.exit_date || '').getTime() - new Date(a.exit_date || '').getTime())
+                      .map(animal => {
+                        const animalMedical = medicalRecords.filter(m => m.animal_id === animal.id);
+                        return (
+                          <div key={animal.id} className="mb-8 border-b border-gray-200 pb-6 last:border-0">
+                            <ReportSection title={`${animal.tag_number ? `Tag #${animal.tag_number}` : ''} ${animal.name || 'Unnamed'}`}>
+                              <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <span className="font-medium">Sale Date:</span> {formatDateForDisplay(animal.exit_date)}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Sex:</span> {animal.sex}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Birth Date:</span> {formatDateForDisplay(animal.birth_date)}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Age at Sale:</span> {calculateAge(animal.birth_date)}
+                                </div>
+                                {animal.description && (
+                                  <div className="col-span-2">
+                                    <span className="font-medium">Description:</span> {animal.description}
+                                  </div>
+                                )}
+                              </div>
+                              {animalMedical.length > 0 && (
+                                <div className="mt-4">
+                                  <h4 className="font-medium text-gray-900 mb-2">Medical History:</h4>
+                                  <ReportTable
+                                    headers={['Date', 'Treatment']}
+                                    rows={animalMedical
+                                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                      .map(m => [
+                                        formatDateForDisplay(m.date),
+                                        m.description,
+                                      ])}
+                                  />
+                                </div>
+                              )}
+                            </ReportSection>
+                          </div>
+                        );
+                      })
+                  )}
+                </>
               )}
             </PrintableReport>
           </div>

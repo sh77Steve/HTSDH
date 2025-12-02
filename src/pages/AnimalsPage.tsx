@@ -169,58 +169,6 @@ export function AnimalsPage() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={async () => {
-                if (!confirm('Delete ALL animals except the first one (Mario)? This will remove all duplicates.')) return;
-                setDeleting(true);
-                try {
-                  const { data: allAnimals, error: fetchError } = await supabase
-                    .from('animals')
-                    .select('id, tag_number, name, created_at')
-                    .eq('ranch_id', currentRanch?.id)
-                    .order('created_at', { ascending: true });
-
-                  if (fetchError) throw fetchError;
-
-                  if (!allAnimals || allAnimals.length <= 1) {
-                    alert('No duplicate animals to delete');
-                    setDeleting(false);
-                    return;
-                  }
-
-                  const toDelete = allAnimals.slice(1);
-                  let deleted = 0;
-                  let failed = 0;
-
-                  for (const animal of toDelete) {
-                    const { error } = await supabase
-                      .from('animals')
-                      .delete()
-                      .eq('id', animal.id);
-
-                    if (error) {
-                      console.error('Failed to delete animal:', animal.id, error);
-                      failed++;
-                    } else {
-                      deleted++;
-                    }
-                  }
-
-                  await fetchAnimals();
-                  alert(`Deleted ${deleted} animals. Failed: ${failed}`);
-                } catch (error: any) {
-                  console.error('Delete error:', error);
-                  alert(`Error: ${error.message}\n\nYou may need admin permissions to delete animals.`);
-                } finally {
-                  setDeleting(false);
-                }
-              }}
-              disabled={deleting}
-              className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50"
-            >
-              <Trash2 className="w-5 h-5 mr-2" />
-              {deleting ? 'Deleting...' : 'Delete Duplicates'}
-            </button>
-            <button
               onClick={() => setShowImportModal(true)}
               className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
             >

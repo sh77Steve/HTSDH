@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RanchProvider, useRanch } from './contexts/RanchContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LoginPage } from './pages/LoginPage';
-import { SignUpPage } from './pages/SignUpPage';
 import { RanchSelector } from './pages/RanchSelector';
 import { AnimalsPage } from './pages/AnimalsPage';
 import { SearchPage } from './pages/SearchPage';
@@ -49,9 +48,6 @@ function AppContent() {
   }
 
   if (!user) {
-    if (currentRoute === '/signup') {
-      return <SignUpPage />;
-    }
     return <LoginPage />;
   }
 

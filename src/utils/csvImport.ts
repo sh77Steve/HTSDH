@@ -221,3 +221,176 @@ export function convertV1Medical(
     created_by_user_id: userId,
   };
 }
+
+function parseRanchRDate(dateStr: string | undefined): string | null {
+  if (!dateStr || dateStr.trim() === '') return null;
+
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+
+    const year = date.getFullYear();
+    if (year < 1950) return null;
+
+    return date.toISOString().split('T')[0];
+  } catch {
+    return null;
+  }
+}
+
+function parseRanchRSex(sex: string | undefined): 'BULL' | 'COW' | 'STEER' | 'HEIFER' {
+  const normalized = (sex || '').toLowerCase().trim();
+  if (normalized === 'bull') return 'BULL';
+  if (normalized === 'cow') return 'COW';
+  if (normalized === 'steer') return 'STEER';
+  if (normalized === 'heifer') return 'HEIFER';
+  if (normalized === 'calf') return 'HEIFER';
+  return 'COW';
+}
+
+function parseRanchRStatus(status: string | undefined): 'PRESENT' | 'SOLD' | 'DEAD' {
+  const normalized = (status || '').toLowerCase().trim();
+  if (normalized === 'sold') return 'SOLD';
+  if (normalized === 'deceased') return 'DEAD';
+  if (normalized === 'active' || normalized === 'present') return 'PRESENT';
+  if (normalized === 'archived') return 'PRESENT';
+  return 'PRESENT';
+}
+
+interface RanchRAnimalRow {
+  primaryId: string;
+  secondaryId: string;
+  herd: string;
+  sex: string;
+  dateOfBirth: string;
+  breed: string;
+  secondaryBreed: string;
+  fatherId: string;
+  motherId: string;
+  seller: string;
+  owner: string;
+  birthWeight: string;
+  weaningWeight: string;
+  weaningDate: string;
+  yearlingWeight: string;
+  yearlingDate: string;
+  status: string;
+  saleTransaction: string;
+  purchaseDate: string;
+  purchasePrice: string;
+  deceasedDate: string;
+  tags: string;
+}
+
+interface RanchRMedicalRow {
+  cattle: string;
+  date: string;
+  treatmentName: string;
+  vaccination: string;
+}
+
+export function parseRanchRAnimalCSV(csvText: string): RanchRAnimalRow[] {
+  const rows = parseCSV(csvText);
+  if (rows.length === 0) return [];
+
+  const headerRow = rows[0];
+  const dataRows = rows.slice(1);
+
+  return dataRows.map(row => ({
+    primaryId: row[0] || '',
+    secondaryId: row[1] || '',
+    herd: row[2] || '',
+    sex: row[3] || '',
+    dateOfBirth: row[4] || '',
+    breed: row[5] || '',
+    secondaryBreed: row[6] || '',
+    fatherId: row[7] || '',
+    motherId: row[8] || '',
+    seller: row[9] || '',
+    owner: row[10] || '',
+    birthWeight: row[11] || '',
+    weaningWeight: row[12] || '',
+    weaningDate: row[13] || '',
+    yearlingWeight: row[14] || '',
+    yearlingDate: row[15] || '',
+    status: row[16] || '',
+    saleTransaction: row[17] || '',
+    purchaseDate: row[18] || '',
+    purchasePrice: row[19] || '',
+    deceasedDate: row[20] || '',
+    tags: row[21] || '',
+  }));
+}
+
+export function parseRanchRMedicalCSV(csvText: string): RanchRMedicalRow[] {
+  const rows = parseCSV(csvText);
+  if (rows.length === 0) return [];
+
+  const headerRow = rows[0];
+  const dataRows = rows.slice(1);
+
+  return dataRows.map(row => ({
+    cattle: row[0] || '',
+    date: row[1] || '',
+    treatmentName: row[2] || '',
+    vaccination: row[3] || '',
+  }));
+}
+
+export function convertRanchRAnimal(
+  row: RanchRAnimalRow,
+  ranchId: string,
+  nameToIdMap: Map<string, string>
+): Partial<Animal> {
+  const name = row.primaryId || row.secondaryId || null;
+  const source = (row.owner?.toLowerCase().includes('purchased') || row.seller) ? 'PURCHASED' : 'BORN';
+
+  const animal: Partial<Animal> = {
+    ranch_id: ranchId,
+    name: name,
+    tag_number: null,
+    tag_color: null,
+    sex: parseRanchRSex(row.sex),
+    source: source,
+    status: parseRanchRStatus(row.status),
+    birth_date: parseRanchRDate(row.dateOfBirth),
+    weaning_date: parseRanchRDate(row.weaningDate),
+    exit_date: parseRanchRDate(row.deceasedDate),
+    description: row.herd || null,
+    notes: null,
+    is_active: true,
+  };
+
+  if (row.motherId && nameToIdMap.has(row.motherId)) {
+    animal.mother_id = nameToIdMap.get(row.motherId);
+  }
+
+  if (row.fatherId && nameToIdMap.has(row.fatherId)) {
+    animal.father_id = nameToIdMap.get(row.fatherId);
+  }
+
+  return animal;
+}
+
+export function convertRanchRMedical(
+  row: RanchRMedicalRow,
+  ranchId: string,
+  nameToIdMap: Map<string, string>,
+  userId: string | null
+): Partial<MedicalHistory> | null {
+  if (!row.cattle || !nameToIdMap.has(row.cattle)) {
+    return null;
+  }
+
+  if (!row.treatmentName?.trim()) {
+    return null;
+  }
+
+  return {
+    animal_id: nameToIdMap.get(row.cattle),
+    ranch_id: ranchId,
+    date: parseRanchRDate(row.date) || new Date().toISOString().split('T')[0],
+    description: row.treatmentName,
+    created_by_user_id: userId,
+  };
+}

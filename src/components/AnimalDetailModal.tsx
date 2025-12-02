@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { X, Edit2, Save, Trash2, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Edit2, Save, Trash2, FileText, Camera, Trash } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalHistoryModal } from './MedicalHistoryModal';
+import { CameraCapture } from './CameraCapture';
+import { useToast } from '../contexts/ToastContext';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
+type AnimalPhoto = Database['public']['Tables']['animal_photos']['Row'];
 
 interface AnimalDetailModalProps {
   animal: Animal;
@@ -15,9 +18,14 @@ interface AnimalDetailModalProps {
 }
 
 export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals }: AnimalDetailModalProps) {
+  const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [photos, setPhotos] = useState<AnimalPhoto[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
     tag_number: animal.tag_number || '',
@@ -31,6 +39,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     exit_date: animal.exit_date || '',
     mother_id: animal.mother_id || '',
     father_id: (animal as any).father_id || '',
+    weight_lbs: (animal as any).weight_lbs || '',
     notes: animal.notes || '',
     description: animal.description || '',
   });
@@ -53,6 +62,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           exit_date: formData.exit_date || null,
           mother_id: formData.mother_id || null,
           father_id: formData.father_id || null,
+          weight_lbs: formData.weight_lbs ? parseFloat(formData.weight_lbs as string) : null,
           description: formData.description || null,
           notes: formData.notes || null,
         })
@@ -122,6 +132,97 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   const mother = getMother();
   const father = getFather();
 
+  useEffect(() => {
+    loadPhotos();
+  }, [animal.id]);
+
+  const loadPhotos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('animal_photos')
+        .select('*')
+        .eq('animal_id', animal.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPhotos(data || []);
+    } catch (error: any) {
+      console.error('Error loading photos:', error);
+    } finally {
+      setLoadingPhotos(false);
+    }
+  };
+
+  const handlePhotoCapture = async (blob: Blob) => {
+    setUploading(true);
+    setShowCamera(false);
+
+    try {
+      const timestamp = Date.now();
+      const fileName = `${animal.ranch_id}/${animal.id}/${timestamp}.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('animal-photos')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('animal-photos')
+        .getPublicUrl(fileName);
+
+      const { error: dbError } = await supabase
+        .from('animal_photos')
+        .insert({
+          animal_id: animal.id,
+          ranch_id: animal.ranch_id,
+          storage_url: publicUrl,
+          is_primary: photos.length === 0
+        });
+
+      if (dbError) throw dbError;
+
+      showToast('Photo added successfully', 'success');
+      await loadPhotos();
+    } catch (error: any) {
+      console.error('Error uploading photo:', error);
+      showToast(`Failed to upload photo: ${error?.message || 'Unknown error'}`, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photo: AnimalPhoto) => {
+    if (!confirm('Are you sure you want to delete this photo?')) return;
+
+    try {
+      const urlParts = photo.storage_url.split('/animal-photos/');
+      const filePath = urlParts[1];
+
+      const { error: storageError } = await supabase.storage
+        .from('animal-photos')
+        .remove([filePath]);
+
+      if (storageError) throw storageError;
+
+      const { error: dbError } = await supabase
+        .from('animal_photos')
+        .delete()
+        .eq('id', photo.id);
+
+      if (dbError) throw dbError;
+
+      showToast('Photo deleted successfully', 'success');
+      await loadPhotos();
+    } catch (error: any) {
+      console.error('Error deleting photo:', error);
+      showToast(`Failed to delete photo: ${error?.message || 'Unknown error'}`, 'error');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -138,8 +239,16 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             {!isEditing ? (
               <>
                 <button
-                  onClick={() => setShowMedical(!showMedical)}
+                  onClick={() => setShowCamera(true)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                  title="Take Photo"
+                  disabled={uploading}
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setShowMedical(!showMedical)}
+                  className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition"
                   title="Medical History"
                 >
                   <FileText className="w-5 h-5" />
@@ -170,6 +279,30 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
         </div>
 
         <div className="p-6">
+          {!isEditing && photos.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Photos</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {photos.map((photo) => (
+                  <div key={photo.id} className="relative group aspect-square">
+                    <img
+                      src={photo.storage_url}
+                      alt="Animal photo"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                    <button
+                      onClick={() => handleDeletePhoto(photo)}
+                      className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                      title="Delete photo"
+                    >
+                      <Trash className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!isEditing ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -229,6 +362,13 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                 <h3 className="text-sm font-medium text-gray-500 mb-1">Father</h3>
                 <p className="text-gray-900">
                   {father ? `${father.tag_number ? `#${father.tag_number}` : ''} ${father.name || father.description || 'Unknown'}` : '-'}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">Weight</h3>
+                <p className="text-gray-900">
+                  {(animal as any).weight_lbs ? `${(animal as any).weight_lbs} lbs` : '-'}
                 </p>
               </div>
 
@@ -382,6 +522,18 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                       ))}
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Weight (lbs)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.weight_lbs}
+                    onChange={(e) => setFormData({ ...formData, weight_lbs: e.target.value })}
+                    placeholder="Enter weight in pounds"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
               </div>
 
               <div>
@@ -433,6 +585,13 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             animalName={animal.name || animal.tag_number || 'Unknown'}
             ranchId={animal.ranch_id}
             onClose={() => setShowMedical(false)}
+          />
+        )}
+
+        {showCamera && (
+          <CameraCapture
+            onCapture={handlePhotoCapture}
+            onClose={() => setShowCamera(false)}
           />
         )}
       </div>

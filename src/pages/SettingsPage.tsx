@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useRanch } from '../contexts/RanchContext';
 import { supabase } from '../lib/supabase';
-import { Save } from 'lucide-react';
+import { Save, Trash2 } from 'lucide-react';
 import type { Database } from '../lib/database.types';
 
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
@@ -12,6 +12,9 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<RanchSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -79,6 +82,44 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    if (deletePassword !== '!delete!') {
+      setMessage({ type: 'error', text: 'Incorrect password. Type "!delete!" to confirm.' });
+      return;
+    }
+
+    if (!currentRanch) return;
+
+    setDeleting(true);
+    setMessage(null);
+
+    try {
+      const { error: medicalError } = await supabase
+        .from('medical_history')
+        .delete()
+        .eq('ranch_id', currentRanch.id);
+
+      if (medicalError) throw medicalError;
+
+      const { error: animalsError } = await supabase
+        .from('animals')
+        .delete()
+        .eq('ranch_id', currentRanch.id);
+
+      if (animalsError) throw animalsError;
+
+      setMessage({ type: 'success', text: 'All cattle and related data deleted successfully' });
+      setShowDeleteConfirm(false);
+      setDeletePassword('');
+      setTimeout(() => setMessage(null), 5000);
+    } catch (error) {
+      console.error('Error deleting data:', error);
+      setMessage({ type: 'error', text: 'Failed to delete data' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -219,6 +260,70 @@ export function SettingsPage() {
               <Save className="w-5 h-5 mr-2" />
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold text-red-900 mb-4">Danger Zone</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Permanently delete all cattle and related data from this ranch
+            </p>
+
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+              >
+                <Trash2 className="w-5 h-5 mr-2" />
+                Delete All Data
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-900 font-medium mb-2">
+                    This action cannot be undone!
+                  </p>
+                  <p className="text-sm text-red-800">
+                    All animals and medical history records will be permanently deleted.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type <code className="bg-gray-100 px-2 py-1 rounded text-red-600 font-mono">!delete!</code> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Type !delete! to confirm"
+                    className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeletePassword('');
+                    }}
+                    disabled={deleting}
+                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAllData}
+                    disabled={deleting || deletePassword !== '!delete!'}
+                    className="inline-flex items-center px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-5 h-5 mr-2" />
+                    {deleting ? 'Deleting...' : 'Confirm Delete All'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

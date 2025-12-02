@@ -85,14 +85,6 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-gray-600 text-sm">
-            Don't have an account?{' '}
-            <a href="/signup" className="text-green-600 hover:text-green-700 font-medium">
-              Sign up
-            </a>
-          </p>
-        </div>
       </div>
     </div>
   );
