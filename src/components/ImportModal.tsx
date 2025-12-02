@@ -5,6 +5,7 @@ import { useRanch } from '../contexts/RanchContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
   parseRanchRAnimalCSV,
+  parseRanchRCalfCSV,
   parseRanchRMedicalCSV,
   convertRanchRAnimal,
   convertRanchRMedical,
@@ -21,30 +22,29 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
   const { user } = useAuth();
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState<'full' | 'treatments'>('full');
-  const [animalFile, setAnimalFile] = useState<File | null>(null);
-  const [medicalFile1, setMedicalFile1] = useState<File | null>(null);
-  const [medicalFile2, setMedicalFile2] = useState<File | null>(null);
+  const [cattleFile, setCattleFile] = useState<File | null>(null);
+  const [calvesFile, setCalvesFile] = useState<File | null>(null);
+  const [cattleTreatmentsFile, setCattleTreatmentsFile] = useState<File | null>(null);
+  const [calfTreatmentsFile, setCalfTreatmentsFile] = useState<File | null>(null);
   const [result, setResult] = useState<{ animals?: ImportResult; medical?: ImportResult } | null>(null);
-  const animalInputRef = useRef<HTMLInputElement>(null);
-  const medicalInputRef1 = useRef<HTMLInputElement>(null);
-  const medicalInputRef2 = useRef<HTMLInputElement>(null);
+  const cattleInputRef = useRef<HTMLInputElement>(null);
+  const calvesInputRef = useRef<HTMLInputElement>(null);
+  const cattleTreatmentsInputRef = useRef<HTMLInputElement>(null);
+  const calfTreatmentsInputRef = useRef<HTMLInputElement>(null);
 
   const handleImport = async () => {
-    if (importMode === 'full' && !animalFile) return;
-    if (importMode === 'treatments' && !medicalFile1 && !medicalFile2) return;
+    if (importMode === 'full' && !cattleFile && !calvesFile) return;
+    if (importMode === 'treatments' && !cattleTreatmentsFile && !calfTreatmentsFile) return;
     if (!currentRanch) return;
 
     setImporting(true);
     setResult(null);
 
     try {
-      const nameToIdMap = new Map<string, string>();
+      const primaryIdToIdMap = new Map<string, string>();
       let animalsResult: ImportResult | undefined;
 
-      if (importMode === 'full' && animalFile) {
-        const animalText = await animalFile.text();
-        const animalRows = parseRanchRAnimalCSV(animalText);
-
+      if (importMode === 'full') {
         animalsResult = {
           success: true,
           imported: 0,
@@ -52,28 +52,63 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
           errors: [],
         };
 
-        for (const row of animalRows) {
-          try {
-            const animalData = convertRanchRAnimal(row, currentRanch.id, nameToIdMap);
+        // Import cattle first
+        if (cattleFile) {
+          const cattleText = await cattleFile.text();
+          const cattleRows = parseRanchRAnimalCSV(cattleText);
 
-            const { data, error } = await supabase
-              .from('animals')
-              .insert(animalData as any)
-              .select('id, name')
-              .single();
+          for (const row of cattleRows) {
+            try {
+              const animalData = convertRanchRAnimal(row, currentRanch.id, primaryIdToIdMap);
 
-            if (error) throw error;
+              const { data, error } = await supabase
+                .from('animals')
+                .insert(animalData as any)
+                .select('id, legacy_uid')
+                .single();
 
-            if (data && (row.primaryId || row.secondaryId)) {
-              const name = row.primaryId || row.secondaryId;
-              nameToIdMap.set(name, data.id);
+              if (error) throw error;
+
+              if (data && row.primaryId) {
+                primaryIdToIdMap.set(row.primaryId, data.id);
+              }
+
+              animalsResult.imported++;
+            } catch (error: any) {
+              console.error('Import error for cattle row:', row, error);
+              animalsResult.errors.push(`Cattle ${row.primaryId || 'unknown'}: ${error.message}`);
+              animalsResult.skipped++;
             }
+          }
+        }
 
-            animalsResult.imported++;
-          } catch (error: any) {
-            console.error('Import error for row:', row, error);
-            animalsResult.errors.push(`Row ${row.primaryId || 'unknown'}: ${error.message}`);
-            animalsResult.skipped++;
+        // Import calves second (after cattle so mothers/fathers exist)
+        if (calvesFile) {
+          const calvesText = await calvesFile.text();
+          const calfRows = parseRanchRCalfCSV(calvesText);
+
+          for (const row of calfRows) {
+            try {
+              const animalData = convertRanchRAnimal(row, currentRanch.id, primaryIdToIdMap);
+
+              const { data, error } = await supabase
+                .from('animals')
+                .insert(animalData as any)
+                .select('id, legacy_uid')
+                .single();
+
+              if (error) throw error;
+
+              if (data && row.primaryId) {
+                primaryIdToIdMap.set(row.primaryId, data.id);
+              }
+
+              animalsResult.imported++;
+            } catch (error: any) {
+              console.error('Import error for calf row:', row, error);
+              animalsResult.errors.push(`Calf ${row.primaryId || 'unknown'}: ${error.message}`);
+              animalsResult.skipped++;
+            }
           }
         }
 
@@ -83,22 +118,22 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
       if (importMode === 'treatments') {
         const { data: existingAnimals, error: fetchError } = await supabase
           .from('animals')
-          .select('id, name')
+          .select('id, legacy_uid')
           .eq('ranch_id', currentRanch.id);
 
         if (fetchError) throw fetchError;
 
         if (existingAnimals) {
           for (const animal of existingAnimals) {
-            if (animal.name) {
-              nameToIdMap.set(animal.name, animal.id);
+            if (animal.legacy_uid) {
+              primaryIdToIdMap.set(animal.legacy_uid, animal.id);
             }
           }
         }
       }
 
       let medicalResult: ImportResult | undefined;
-      const medicalFiles = [medicalFile1, medicalFile2].filter(f => f !== null) as File[];
+      const medicalFiles = [cattleTreatmentsFile, calfTreatmentsFile].filter(f => f !== null) as File[];
 
       if (medicalFiles.length > 0) {
         medicalResult = {
@@ -114,7 +149,7 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
 
           for (const row of medicalRows) {
             try {
-              const medicalData = convertRanchRMedical(row, currentRanch.id, nameToIdMap, user?.id || null);
+              const medicalData = convertRanchRMedical(row, currentRanch.id, primaryIdToIdMap, user?.id || null);
 
               if (!medicalData) {
                 medicalResult.skipped++;
@@ -221,19 +256,25 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
                       {importMode === 'full' ? (
                         <>
                           <li>
-                            <strong>Cattle CSV</strong>: Export from RanchR with headers (required)
+                            <strong>Cattle CSV</strong>: ranchr_reports_csv_cattle.csv (adult cattle)
                           </li>
                           <li>
-                            <strong>Treatment CSVs</strong>: Up to 2 treatment files (optional)
+                            <strong>Calves CSV</strong>: ranchr_reports_csv_calves.csv (calves)
                           </li>
-                          <li>Full import creates new animals and their treatments</li>
+                          <li>
+                            <strong>Cattle Treatments</strong>: ranchr_reports_csv_treatments.csv (optional)
+                          </li>
+                          <li>
+                            <strong>Calf Treatments</strong>: ranchr_reports_csv_calf_treatments.csv (optional)
+                          </li>
+                          <li>Import cattle first, then calves, then treatments</li>
                         </>
                       ) : (
                         <>
                           <li>
                             <strong>Treatment CSVs</strong>: Up to 2 treatment files from RanchR
                           </li>
-                          <li>Treatments will be linked to existing animals by name</li>
+                          <li>Treatments will be linked to existing animals by Primary ID</li>
                           <li>Use this to import additional treatment files without creating duplicate animals</li>
                         </>
                       )}
@@ -244,57 +285,87 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
               </div>
 
               {importMode === 'full' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cattle CSV File <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    ref={animalInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => setAnimalFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => animalInputRef.current?.click()}
-                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-gray-400" />
-                      <div className="flex-1">
-                        {animalFile ? (
-                          <span className="text-sm font-medium text-gray-900">{animalFile.name}</span>
-                        ) : (
-                          <span className="text-sm text-gray-600">Click to select RanchR cattle export</span>
-                        )}
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Cattle CSV File
+                    </label>
+                    <input
+                      ref={cattleInputRef}
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setCattleFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => cattleInputRef.current?.click()}
+                      className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-gray-400" />
+                        <div className="flex-1">
+                          {cattleFile ? (
+                            <span className="text-sm font-medium text-gray-900">{cattleFile.name}</span>
+                          ) : (
+                            <span className="text-sm text-gray-600">ranchr_reports_csv_cattle.csv (adult cattle)</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                </div>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Calves CSV File
+                    </label>
+                    <input
+                      ref={calvesInputRef}
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setCalvesFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => calvesInputRef.current?.click()}
+                      className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-gray-400" />
+                        <div className="flex-1">
+                          {calvesFile ? (
+                            <span className="text-sm font-medium text-gray-900">{calvesFile.name}</span>
+                          ) : (
+                            <span className="text-sm text-gray-600">ranchr_reports_csv_calves.csv (calves)</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </>
               )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Treatments CSV File 1 {importMode === 'treatments' && <span className="text-red-500">*</span>}
+                  Cattle Treatments CSV {importMode === 'treatments' && <span className="text-red-500">*</span>}
                 </label>
                 <input
-                  ref={medicalInputRef1}
+                  ref={cattleTreatmentsInputRef}
                   type="file"
                   accept=".csv"
-                  onChange={(e) => setMedicalFile1(e.target.files?.[0] || null)}
+                  onChange={(e) => setCattleTreatmentsFile(e.target.files?.[0] || null)}
                   className="hidden"
                 />
                 <button
-                  onClick={() => medicalInputRef1.current?.click()}
+                  onClick={() => cattleTreatmentsInputRef.current?.click()}
                   className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
                 >
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-gray-400" />
                     <div className="flex-1">
-                      {medicalFile1 ? (
-                        <span className="text-sm font-medium text-gray-900">{medicalFile1.name}</span>
+                      {cattleTreatmentsFile ? (
+                        <span className="text-sm font-medium text-gray-900">{cattleTreatmentsFile.name}</span>
                       ) : (
-                        <span className="text-sm text-gray-600">Click to select RanchR treatments export</span>
+                        <span className="text-sm text-gray-600">ranchr_reports_csv_treatments.csv (optional)</span>
                       )}
                     </div>
                   </div>
@@ -303,26 +374,26 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Treatments CSV File 2 (optional)
+                  Calf Treatments CSV (optional)
                 </label>
                 <input
-                  ref={medicalInputRef2}
+                  ref={calfTreatmentsInputRef}
                   type="file"
                   accept=".csv"
-                  onChange={(e) => setMedicalFile2(e.target.files?.[0] || null)}
+                  onChange={(e) => setCalfTreatmentsFile(e.target.files?.[0] || null)}
                   className="hidden"
                 />
                 <button
-                  onClick={() => medicalInputRef2.current?.click()}
+                  onClick={() => calfTreatmentsInputRef.current?.click()}
                   className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
                 >
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-gray-400" />
                     <div className="flex-1">
-                      {medicalFile2 ? (
-                        <span className="text-sm font-medium text-gray-900">{medicalFile2.name}</span>
+                      {calfTreatmentsFile ? (
+                        <span className="text-sm font-medium text-gray-900">{calfTreatmentsFile.name}</span>
                       ) : (
-                        <span className="text-sm text-gray-600">Click to select second RanchR treatments export</span>
+                        <span className="text-sm text-gray-600">ranchr_reports_csv_calf_treatments.csv (optional)</span>
                       )}
                     </div>
                   </div>
@@ -340,8 +411,8 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
                 <button
                   onClick={handleImport}
                   disabled={
-                    (importMode === 'full' && !animalFile) ||
-                    (importMode === 'treatments' && !medicalFile1 && !medicalFile2) ||
+                    (importMode === 'full' && !cattleFile && !calvesFile) ||
+                    (importMode === 'treatments' && !cattleTreatmentsFile && !calfTreatmentsFile) ||
                     importing
                   }
                   className="inline-flex items-center px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"

@@ -282,6 +282,37 @@ interface RanchRAnimalRow {
   tags: string;
 }
 
+interface RanchRCalfRow {
+  primaryId: string;
+  secondaryId: string;
+  herd: string;
+  sex: string;
+  dateOfBirth: string;
+  breed: string;
+  secondaryBreed: string;
+  fatherId: string;
+  fatherName: string;
+  motherId: string;
+  motherName: string;
+  seller: string;
+  owner: string;
+  birthWeight: string;
+  weaningWeight: string;
+  weaningDate: string;
+  yearlingWeight: string;
+  yearlingDate: string;
+  status: string;
+  saleTransaction: string;
+  purchaseDate: string;
+  purchasePrice: string;
+  result: string;
+  calvingEase: string;
+  damUdderScore: string;
+  damBcs: string;
+  damDisposition: string;
+  tags: string;
+}
+
 interface RanchRMedicalRow {
   cattle: string;
   date: string;
@@ -322,6 +353,45 @@ export function parseRanchRAnimalCSV(csvText: string): RanchRAnimalRow[] {
   }));
 }
 
+export function parseRanchRCalfCSV(csvText: string): RanchRCalfRow[] {
+  const rows = parseCSV(csvText);
+  if (rows.length === 0) return [];
+
+  const headerRow = rows[0];
+  const dataRows = rows.slice(1);
+
+  return dataRows.map(row => ({
+    primaryId: row[0] || '',
+    secondaryId: row[1] || '',
+    herd: row[2] || '',
+    sex: row[3] || '',
+    dateOfBirth: row[4] || '',
+    breed: row[5] || '',
+    secondaryBreed: row[6] || '',
+    fatherId: row[7] || '',
+    fatherName: row[8] || '',
+    motherId: row[9] || '',
+    motherName: row[10] || '',
+    seller: row[11] || '',
+    owner: row[12] || '',
+    birthWeight: row[13] || '',
+    weaningWeight: row[14] || '',
+    weaningDate: row[15] || '',
+    yearlingWeight: row[16] || '',
+    yearlingDate: row[17] || '',
+    status: row[18] || '',
+    saleTransaction: row[19] || '',
+    purchaseDate: row[20] || '',
+    purchasePrice: row[21] || '',
+    result: row[22] || '',
+    calvingEase: row[23] || '',
+    damUdderScore: row[24] || '',
+    damBcs: row[25] || '',
+    damDisposition: row[26] || '',
+    tags: row[27] || '',
+  }));
+}
+
 export function parseRanchRMedicalCSV(csvText: string): RanchRMedicalRow[] {
   const rows = parseCSV(csvText);
   if (rows.length === 0) return [];
@@ -338,35 +408,37 @@ export function parseRanchRMedicalCSV(csvText: string): RanchRMedicalRow[] {
 }
 
 export function convertRanchRAnimal(
-  row: RanchRAnimalRow,
+  row: RanchRAnimalRow | RanchRCalfRow,
   ranchId: string,
-  nameToIdMap: Map<string, string>
+  primaryIdToIdMap: Map<string, string>
 ): Partial<Animal> {
-  const name = row.primaryId || row.secondaryId || null;
+  const primaryId = row.primaryId?.trim() || null;
+  const name = row.secondaryId?.trim() || primaryId;
   const source = (row.owner?.toLowerCase().includes('purchased') || row.seller) ? 'PURCHASED' : 'BORN';
 
   const animal: Partial<Animal> = {
     ranch_id: ranchId,
+    legacy_uid: primaryId,
     name: name,
-    tag_number: null,
+    tag_number: primaryId,
     tag_color: null,
     sex: parseRanchRSex(row.sex),
     source: source,
     status: parseRanchRStatus(row.status),
     birth_date: parseRanchRDate(row.dateOfBirth),
     weaning_date: parseRanchRDate(row.weaningDate),
-    exit_date: parseRanchRDate(row.deceasedDate),
+    exit_date: parseRanchRDate(row.deceasedDate || ('result' in row ? row.result : '')),
     description: row.herd || null,
     notes: null,
     is_active: true,
   };
 
-  if (row.motherId && nameToIdMap.has(row.motherId)) {
-    animal.mother_id = nameToIdMap.get(row.motherId);
+  if (row.motherId && primaryIdToIdMap.has(row.motherId)) {
+    animal.mother_id = primaryIdToIdMap.get(row.motherId);
   }
 
-  if (row.fatherId && nameToIdMap.has(row.fatherId)) {
-    animal.father_id = nameToIdMap.get(row.fatherId);
+  if (row.fatherId && primaryIdToIdMap.has(row.fatherId)) {
+    animal.father_id = primaryIdToIdMap.get(row.fatherId);
   }
 
   return animal;
@@ -375,10 +447,10 @@ export function convertRanchRAnimal(
 export function convertRanchRMedical(
   row: RanchRMedicalRow,
   ranchId: string,
-  nameToIdMap: Map<string, string>,
+  primaryIdToIdMap: Map<string, string>,
   userId: string | null
 ): Partial<MedicalHistory> | null {
-  if (!row.cattle || !nameToIdMap.has(row.cattle)) {
+  if (!row.cattle || !primaryIdToIdMap.has(row.cattle)) {
     return null;
   }
 
@@ -387,7 +459,7 @@ export function convertRanchRMedical(
   }
 
   return {
-    animal_id: nameToIdMap.get(row.cattle),
+    animal_id: primaryIdToIdMap.get(row.cattle),
     ranch_id: ranchId,
     date: parseRanchRDate(row.date) || new Date().toISOString().split('T')[0],
     description: row.treatmentName,

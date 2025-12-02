@@ -125,6 +125,7 @@ export interface Database {
           weaning_date: string | null;
           exit_date: string | null;
           mother_id: string | null;
+          father_id: string | null;
           weight_lbs: number | null;
           notes: string | null;
           is_active: boolean;
@@ -146,6 +147,7 @@ export interface Database {
           weaning_date?: string | null;
           exit_date?: string | null;
           mother_id?: string | null;
+          father_id?: string | null;
           weight_lbs?: number | null;
           notes?: string | null;
           is_active?: boolean;
@@ -167,6 +169,7 @@ export interface Database {
           weaning_date?: string | null;
           exit_date?: string | null;
           mother_id?: string | null;
+          father_id?: string | null;
           weight_lbs?: number | null;
           notes?: string | null;
           is_active?: boolean;
