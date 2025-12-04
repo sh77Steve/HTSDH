@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { X, Edit2, Save, Trash2, FileText, Camera, Trash } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Edit2, Save, Trash2, FileText, Camera, Trash, Upload, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalHistoryModal } from './MedicalHistoryModal';
 import { CameraCapture } from './CameraCapture';
+import { PhotoGallery } from './PhotoGallery';
 import { useToast } from '../contexts/ToastContext';
 import type { Database } from '../lib/database.types';
 
@@ -19,10 +20,12 @@ interface AnimalDetailModalProps {
 
 export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals }: AnimalDetailModalProps) {
   const { showToast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
   const [photos, setPhotos] = useState<AnimalPhoto[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -195,9 +198,60 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     }
   };
 
-  const handleDeletePhoto = async (photo: AnimalPhoto) => {
-    if (!confirm('Are you sure you want to delete this photo?')) return;
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file', 'error');
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const fileName = `${animal.ranch_id}/${animal.id}/${timestamp}.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('animal-photos')
+        .upload(fileName, file, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('animal-photos')
+        .getPublicUrl(fileName);
+
+      const { error: dbError } = await supabase
+        .from('animal_photos')
+        .insert({
+          animal_id: animal.id,
+          ranch_id: animal.ranch_id,
+          storage_url: publicUrl,
+          is_primary: photos.length === 0
+        });
+
+      if (dbError) throw dbError;
+
+      showToast('Photo uploaded successfully', 'success');
+      await loadPhotos();
+    } catch (error: any) {
+      console.error('Error uploading photo:', error);
+      showToast(`Failed to upload photo: ${error?.message || 'Unknown error'}`, 'error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeletePhoto = async (photo: AnimalPhoto) => {
     try {
       const urlParts = photo.storage_url.split('/animal-photos/');
       const filePath = urlParts[1];
@@ -217,6 +271,10 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
 
       showToast('Photo deleted successfully', 'success');
       await loadPhotos();
+
+      if (photos.length <= 1) {
+        setShowGallery(false);
+      }
     } catch (error: any) {
       console.error('Error deleting photo:', error);
       showToast(`Failed to delete photo: ${error?.message || 'Unknown error'}`, 'error');
@@ -246,6 +304,33 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                 >
                   <Camera className="w-5 h-5" />
                 </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                  title="Upload Photo"
+                  disabled={uploading}
+                >
+                  <Upload className="w-5 h-5" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                {photos.length > 0 && (
+                  <button
+                    onClick={() => setShowGallery(true)}
+                    className="relative p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                    title="View Images"
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                    <span className="absolute -top-1 -right-1 bg-green-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+                      {photos.length}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => setShowMedical(!showMedical)}
                   className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition"
@@ -279,30 +364,6 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
         </div>
 
         <div className="p-6">
-          {!isEditing && photos.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Photos</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {photos.map((photo) => (
-                  <div key={photo.id} className="relative group aspect-square">
-                    <img
-                      src={photo.storage_url}
-                      alt="Animal photo"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                    <button
-                      onClick={() => handleDeletePhoto(photo)}
-                      className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
-                      title="Delete photo"
-                    >
-                      <Trash className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {!isEditing ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -592,6 +653,14 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           <CameraCapture
             onCapture={handlePhotoCapture}
             onClose={() => setShowCamera(false)}
+          />
+        )}
+
+        {showGallery && (
+          <PhotoGallery
+            photos={photos}
+            onClose={() => setShowGallery(false)}
+            onDelete={handleDeletePhoto}
           />
         )}
       </div>

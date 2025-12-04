@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useRanch } from '../contexts/RanchContext';
 import { supabase } from '../lib/supabase';
-import { Save, Trash2 } from 'lucide-react';
+import { Save, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
+import { ImageImportModal } from '../components/ImageImportModal';
+import { ImportModal } from '../components/ImportModal';
 import type { Database } from '../lib/database.types';
 
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
+type Animal = Database['public']['Tables']['animals']['Row'];
 
 export function SettingsPage() {
   const { currentRanch } = useRanch();
@@ -15,13 +18,34 @@ export function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showImageImport, setShowImageImport] = useState(false);
+  const [showDataImport, setShowDataImport] = useState(false);
+  const [animals, setAnimals] = useState<Animal[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (currentRanch) {
       fetchSettings();
+      fetchAnimals();
     }
   }, [currentRanch]);
+
+  const fetchAnimals = async () => {
+    if (!currentRanch) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('animals')
+        .select('*')
+        .eq('ranch_id', currentRanch.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAnimals(data || []);
+    } catch (error) {
+      console.error('Error fetching animals:', error);
+    }
+  };
 
   const fetchSettings = async () => {
     if (!currentRanch) return;
@@ -263,6 +287,43 @@ export function SettingsPage() {
           </div>
         </div>
 
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Import Data</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Import animal data and photos from external sources
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setShowDataImport(true)}
+                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Upload className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Import RanchR Data</h3>
+                  <p className="text-sm text-gray-600">Import cattle and treatments from RanchR CSV files</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowImageImport(true)}
+                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <ImageIcon className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Import Photos</h3>
+                  <p className="text-sm text-gray-600">Upload animal photos from your computer</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-6">
           <div>
             <h2 className="text-xl font-semibold text-red-900 mb-4">Danger Zone</h2>
@@ -327,6 +388,30 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {showImageImport && (
+        <ImageImportModal
+          onClose={() => setShowImageImport(false)}
+          onComplete={() => {
+            setShowImageImport(false);
+            setMessage({ type: 'success', text: 'Photos imported successfully' });
+            setTimeout(() => setMessage(null), 3000);
+          }}
+          animals={animals}
+        />
+      )}
+
+      {showDataImport && (
+        <ImportModal
+          onClose={() => setShowDataImport(false)}
+          onComplete={() => {
+            setShowDataImport(false);
+            fetchAnimals();
+            setMessage({ type: 'success', text: 'Data imported successfully' });
+            setTimeout(() => setMessage(null), 3000);
+          }}
+        />
+      )}
     </Layout>
   );
 }
