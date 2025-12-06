@@ -9,6 +9,8 @@ import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
 type AnimalPhoto = Database['public']['Tables']['animal_photos']['Row'];
+type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
+type CustomFieldValue = Database['public']['Tables']['custom_field_values']['Row'];
 
 interface AnimalDetailModalProps {
   animal: Animal;
@@ -29,6 +31,8 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   const [photos, setPhotos] = useState<AnimalPhoto[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     tag_number: animal.tag_number || '',
@@ -72,6 +76,31 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
         .eq('id', animal.id);
 
       if (error) throw error;
+
+      for (const field of customFields) {
+        const value = customFieldValues[field.id] || null;
+
+        if (value) {
+          const { error: upsertError } = await supabase
+            .from('custom_field_values')
+            .upsert({
+              animal_id: animal.id,
+              field_id: field.id,
+              value: value,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: 'animal_id,field_id'
+            });
+
+          if (upsertError) throw upsertError;
+        } else {
+          await supabase
+            .from('custom_field_values')
+            .delete()
+            .eq('animal_id', animal.id)
+            .eq('field_id', field.id);
+        }
+      }
 
       setIsEditing(false);
       onUpdate();
@@ -137,7 +166,36 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
 
   useEffect(() => {
     loadPhotos();
+    loadCustomFields();
   }, [animal.id]);
+
+  const loadCustomFields = async () => {
+    try {
+      const { data: fieldDefs, error: fieldError } = await supabase
+        .from('custom_field_definitions')
+        .select('*')
+        .eq('ranch_id', animal.ranch_id)
+        .order('display_order', { ascending: true });
+
+      if (fieldError) throw fieldError;
+      setCustomFields(fieldDefs || []);
+
+      const { data: fieldVals, error: valError } = await supabase
+        .from('custom_field_values')
+        .select('*')
+        .eq('animal_id', animal.id);
+
+      if (valError) throw valError;
+
+      const values: Record<string, string> = {};
+      (fieldVals || []).forEach((val) => {
+        values[val.field_id] = val.value || '';
+      });
+      setCustomFieldValues(values);
+    } catch (error: any) {
+      console.error('Error loading custom fields:', error);
+    }
+  };
 
   const loadPhotos = async () => {
     try {
@@ -248,6 +306,24 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const formatCustomFieldValue = (field: CustomFieldDefinition, value: string | null) => {
+    if (!value) return '-';
+
+    switch (field.field_type) {
+      case 'dollar':
+        const dollarValue = parseFloat(value);
+        return isNaN(dollarValue) ? value : `$${dollarValue.toFixed(2)}`;
+      case 'integer':
+        return value;
+      case 'decimal':
+        const decimalValue = parseFloat(value);
+        return isNaN(decimalValue) ? value : decimalValue.toFixed(2);
+      case 'text':
+      default:
+        return value;
     }
   };
 
@@ -442,6 +518,22 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                 <h3 className="text-sm font-medium text-gray-500 mb-1">Notes</h3>
                 <p className="text-gray-900 whitespace-pre-wrap">{animal.notes || '-'}</p>
               </div>
+
+              {customFields.length > 0 && (
+                <>
+                  <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Custom Fields</h3>
+                  </div>
+                  {customFields.map((field) => (
+                    <div key={field.id}>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">{field.field_name}</h3>
+                      <p className="text-gray-900">
+                        {formatCustomFieldValue(field, customFieldValues[field.id] || null)}
+                      </p>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           ) : (
             <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
@@ -616,6 +708,63 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
+
+              {customFields.length > 0 && (
+                <>
+                  <div className="border-t border-gray-200 pt-4 mt-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Custom Fields</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {customFields.map((field) => (
+                      <div key={field.id}>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {field.field_name}
+                          {field.is_required && <span className="text-red-600 ml-1">*</span>}
+                        </label>
+                        {field.field_type === 'text' ? (
+                          <input
+                            type="text"
+                            value={customFieldValues[field.id] || ''}
+                            onChange={(e) => setCustomFieldValues({ ...customFieldValues, [field.id]: e.target.value })}
+                            required={field.is_required}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          />
+                        ) : field.field_type === 'integer' ? (
+                          <input
+                            type="number"
+                            step="1"
+                            value={customFieldValues[field.id] || ''}
+                            onChange={(e) => setCustomFieldValues({ ...customFieldValues, [field.id]: e.target.value })}
+                            required={field.is_required}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          />
+                        ) : field.field_type === 'decimal' ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={customFieldValues[field.id] || ''}
+                            onChange={(e) => setCustomFieldValues({ ...customFieldValues, [field.id]: e.target.value })}
+                            required={field.is_required}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          />
+                        ) : field.field_type === 'dollar' ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={customFieldValues[field.id] || ''}
+                              onChange={(e) => setCustomFieldValues({ ...customFieldValues, [field.id]: e.target.value })}
+                              required={field.is_required}
+                              className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end gap-3 pt-4">
                 <button

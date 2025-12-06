@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useRanch } from '../contexts/RanchContext';
 import { supabase } from '../lib/supabase';
-import { Save, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
-import { ImageImportModal } from '../components/ImageImportModal';
+import { Save, Trash2, Upload, Plus, Edit2, X } from 'lucide-react';
 import { ImportModal } from '../components/ImportModal';
 import type { Database } from '../lib/database.types';
 
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
-type Animal = Database['public']['Tables']['animals']['Row'];
+type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
 
 export function SettingsPage() {
   const { currentRanch } = useRanch();
@@ -18,34 +17,24 @@ export function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showImageImport, setShowImageImport] = useState(false);
   const [showDataImport, setShowDataImport] = useState(false);
-  const [animals, setAnimals] = useState<Animal[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [showFieldForm, setShowFieldForm] = useState(false);
+  const [editingField, setEditingField] = useState<CustomFieldDefinition | null>(null);
+  const [fieldForm, setFieldForm] = useState({
+    field_name: '',
+    field_type: 'text' as 'text' | 'dollar' | 'integer' | 'decimal',
+    include_in_totals: false,
+    is_required: false,
+  });
 
   useEffect(() => {
     if (currentRanch) {
       fetchSettings();
-      fetchAnimals();
+      fetchCustomFields();
     }
   }, [currentRanch]);
-
-  const fetchAnimals = async () => {
-    if (!currentRanch) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('animals')
-        .select('*')
-        .eq('ranch_id', currentRanch.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAnimals(data || []);
-    } catch (error) {
-      console.error('Error fetching animals:', error);
-    }
-  };
 
   const fetchSettings = async () => {
     if (!currentRanch) return;
@@ -106,6 +95,117 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const fetchCustomFields = async () => {
+    if (!currentRanch) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('custom_field_definitions')
+        .select('*')
+        .eq('ranch_id', currentRanch.id)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+      setCustomFields(data || []);
+    } catch (error) {
+      console.error('Error fetching custom fields:', error);
+    }
+  };
+
+  const handleAddField = () => {
+    setEditingField(null);
+    setFieldForm({
+      field_name: '',
+      field_type: 'text',
+      include_in_totals: false,
+      is_required: false,
+    });
+    setShowFieldForm(true);
+  };
+
+  const handleEditField = (field: CustomFieldDefinition) => {
+    setEditingField(field);
+    setFieldForm({
+      field_name: field.field_name,
+      field_type: field.field_type,
+      include_in_totals: field.include_in_totals,
+      is_required: field.is_required,
+    });
+    setShowFieldForm(true);
+  };
+
+  const handleSaveField = async () => {
+    if (!currentRanch || !fieldForm.field_name.trim()) {
+      setMessage({ type: 'error', text: 'Field name is required' });
+      return;
+    }
+
+    try {
+      if (editingField) {
+        const { error } = await supabase
+          .from('custom_field_definitions')
+          .update({
+            field_name: fieldForm.field_name,
+            field_type: fieldForm.field_type,
+            include_in_totals: fieldForm.include_in_totals,
+            is_required: fieldForm.is_required,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingField.id);
+
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Custom field updated successfully' });
+      } else {
+        const maxOrder = customFields.length > 0
+          ? Math.max(...customFields.map(f => f.display_order))
+          : -1;
+
+        const { error } = await supabase
+          .from('custom_field_definitions')
+          .insert({
+            ranch_id: currentRanch.id,
+            field_name: fieldForm.field_name,
+            field_type: fieldForm.field_type,
+            include_in_totals: fieldForm.include_in_totals,
+            is_required: fieldForm.is_required,
+            display_order: maxOrder + 1,
+          });
+
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Custom field added successfully' });
+      }
+
+      setShowFieldForm(false);
+      await fetchCustomFields();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error('Error saving custom field:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to save custom field' });
+    }
+  };
+
+  const handleDeleteField = async (fieldId: string) => {
+    if (!confirm('Are you sure you want to delete this custom field? All associated data will be lost.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('custom_field_definitions')
+        .delete()
+        .eq('id', fieldId);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: 'Custom field deleted successfully' });
+      await fetchCustomFields();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error('Error deleting custom field:', error);
+      setMessage({ type: 'error', text: 'Failed to delete custom field' });
     }
   };
 
@@ -288,39 +388,198 @@ export function SettingsPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Custom Fields</h2>
+              <p className="text-sm text-gray-600">
+                Define custom fields to track additional information for your animals
+              </p>
+            </div>
+            <button
+              onClick={handleAddField}
+              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Add Field
+            </button>
+          </div>
+
+          {customFields.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Field Name</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Type</th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Include in Totals</th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900">Required</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {customFields.map((field) => (
+                    <tr key={field.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">{field.field_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 capitalize">{field.field_type}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          field.include_in_totals
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {field.include_in_totals ? 'Yes' : 'No'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          field.is_required
+                            ? 'bg-orange-100 text-orange-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {field.is_required ? 'Yes' : 'No'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        <button
+                          onClick={() => handleEditField(field)}
+                          className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded transition"
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteField(field.id)}
+                          className="inline-flex items-center px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded transition"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No custom fields defined. Click "Add Field" to create one.
+            </div>
+          )}
+        </div>
+
+        {showFieldForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {editingField ? 'Edit Custom Field' : 'Add Custom Field'}
+                </h3>
+                <button
+                  onClick={() => setShowFieldForm(false)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Field Name
+                  </label>
+                  <input
+                    type="text"
+                    value={fieldForm.field_name}
+                    onChange={(e) => setFieldForm({ ...fieldForm, field_name: e.target.value })}
+                    placeholder="e.g., Sire, Sale Price"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Field Type
+                  </label>
+                  <select
+                    value={fieldForm.field_type}
+                    onChange={(e) => setFieldForm({ ...fieldForm, field_type: e.target.value as any })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="text">Text</option>
+                    <option value="integer">Integer</option>
+                    <option value="decimal">Decimal Number</option>
+                    <option value="dollar">Dollar Amount</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="include_in_totals"
+                    checked={fieldForm.include_in_totals}
+                    onChange={(e) => setFieldForm({ ...fieldForm, include_in_totals: e.target.checked })}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <label htmlFor="include_in_totals" className="ml-2 text-sm text-gray-700">
+                    Include in Report Totals
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="is_required"
+                    checked={fieldForm.is_required}
+                    onChange={(e) => setFieldForm({ ...fieldForm, is_required: e.target.checked })}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <label htmlFor="is_required" className="ml-2 text-sm text-gray-700">
+                    Required Field
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowFieldForm(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveField}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+                >
+                  {editingField ? 'Update' : 'Add'} Field
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Import Data</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Import animal data and photos from external sources
+              Import animal data from external sources
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={() => setShowDataImport(true)}
-                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
-              >
-                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Upload className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Import RanchR Data</h3>
-                  <p className="text-sm text-gray-600">Import cattle and treatments from RanchR CSV files</p>
-                </div>
-              </button>
+            <button
+              onClick={() => setShowDataImport(true)}
+              className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left w-full max-w-md"
+            >
+              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <Upload className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Import RanchR Data</h3>
+                <p className="text-sm text-gray-600">Import cattle and treatments from RanchR CSV files</p>
+              </div>
+            </button>
 
-              <button
-                onClick={() => setShowImageImport(true)}
-                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
-              >
-                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <ImageIcon className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Import Photos</h3>
-                  <p className="text-sm text-gray-600">Upload animal photos from your computer</p>
-                </div>
-              </button>
-            </div>
+            <p className="text-xs text-gray-500 italic mt-3">
+              "RanchR" is a trademark of its respective owner. This app is not affiliated with or endorsed by RanchR.
+            </p>
           </div>
         </div>
 
@@ -389,24 +648,11 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {showImageImport && (
-        <ImageImportModal
-          onClose={() => setShowImageImport(false)}
-          onComplete={() => {
-            setShowImageImport(false);
-            setMessage({ type: 'success', text: 'Photos imported successfully' });
-            setTimeout(() => setMessage(null), 3000);
-          }}
-          animals={animals}
-        />
-      )}
-
       {showDataImport && (
         <ImportModal
           onClose={() => setShowDataImport(false)}
           onComplete={() => {
             setShowDataImport(false);
-            fetchAnimals();
             setMessage({ type: 'success', text: 'Data imported successfully' });
             setTimeout(() => setMessage(null), 3000);
           }}

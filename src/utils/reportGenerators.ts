@@ -3,6 +3,8 @@ import type { Database } from '../lib/database.types';
 type Animal = Database['public']['Tables']['animals']['Row'];
 type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
+type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
+type CustomFieldValue = Database['public']['Tables']['custom_field_values']['Row'];
 
 export interface CountsReport {
   totalPresent: number;
@@ -88,8 +90,30 @@ export function exportToCSV(data: any[], headers: string[], filename: string) {
   document.body.removeChild(link);
 }
 
-export function formatAnimalForExport(animal: Animal) {
-  return {
+export function formatCustomFieldValue(field: CustomFieldDefinition, value: string | null): string {
+  if (!value) return '';
+
+  switch (field.field_type) {
+    case 'dollar':
+      const dollarValue = parseFloat(value);
+      return isNaN(dollarValue) ? value : dollarValue.toFixed(2);
+    case 'integer':
+      return value;
+    case 'decimal':
+      const decimalValue = parseFloat(value);
+      return isNaN(decimalValue) ? value : decimalValue.toFixed(2);
+    case 'text':
+    default:
+      return value;
+  }
+}
+
+export function formatAnimalForExport(
+  animal: Animal,
+  customFields?: CustomFieldDefinition[],
+  customFieldValues?: CustomFieldValue[]
+) {
+  const baseData: Record<string, any> = {
     'Tag Number': animal.tag_number || '',
     'Tag Color': animal.tag_color || '',
     'Name': animal.name || '',
@@ -102,10 +126,24 @@ export function formatAnimalForExport(animal: Animal) {
     'Description': animal.description || '',
     'Notes': animal.notes || '',
   };
+
+  if (customFields && customFieldValues) {
+    customFields.forEach(field => {
+      const value = customFieldValues.find(v => v.field_id === field.id && v.animal_id === animal.id);
+      baseData[field.field_name] = formatCustomFieldValue(field, value?.value || null);
+    });
+  }
+
+  return baseData;
 }
 
-export function formatAnimalWithMedicalForExport(animal: Animal, medicalRecords: MedicalHistory[]) {
-  const base = formatAnimalForExport(animal);
+export function formatAnimalWithMedicalForExport(
+  animal: Animal,
+  medicalRecords: MedicalHistory[],
+  customFields?: CustomFieldDefinition[],
+  customFieldValues?: CustomFieldValue[]
+) {
+  const base = formatAnimalForExport(animal, customFields, customFieldValues);
   const medical = medicalRecords
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .map(m => `${m.date}: ${m.description}`)

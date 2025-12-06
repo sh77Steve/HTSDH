@@ -18,6 +18,8 @@ import type { Database } from '../lib/database.types';
 type Animal = Database['public']['Tables']['animals']['Row'];
 type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
+type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
+type CustomFieldValue = Database['public']['Tables']['custom_field_values']['Row'];
 
 type ReportType = 'counts' | 'inventory' | 'calves' | 'sales' | null;
 
@@ -26,6 +28,8 @@ export function ReportsPage() {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [medicalRecords, setMedicalRecords] = useState<MedicalHistory[]>([]);
   const [settings, setSettings] = useState<RanchSettings | null>(null);
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValue[]>([]);
   const [counts, setCounts] = useState<CountsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentReport, setCurrentReport] = useState<ReportType>(null);
@@ -42,7 +46,7 @@ export function ReportsPage() {
 
     setLoading(true);
     try {
-      const [animalsRes, medicalRes, settingsRes] = await Promise.all([
+      const [animalsRes, medicalRes, settingsRes, customFieldsRes] = await Promise.all([
         supabase
           .from('animals')
           .select('*')
@@ -57,13 +61,31 @@ export function ReportsPage() {
           .select('*')
           .eq('ranch_id', currentRanch.id)
           .maybeSingle(),
+        supabase
+          .from('custom_field_definitions')
+          .select('*')
+          .eq('ranch_id', currentRanch.id)
+          .order('display_order', { ascending: true }),
       ]);
 
       if (animalsRes.error) throw animalsRes.error;
       if (medicalRes.error) throw medicalRes.error;
       if (settingsRes.error) throw settingsRes.error;
+      if (customFieldsRes.error) throw customFieldsRes.error;
 
       const fetchedAnimals = animalsRes.data || [];
+      const fetchedFields = customFieldsRes.data || [];
+      setCustomFields(fetchedFields);
+
+      if (fetchedFields.length > 0) {
+        const valuesRes = await supabase
+          .from('custom_field_values')
+          .select('*')
+          .in('animal_id', fetchedAnimals.map(a => a.id));
+
+        if (valuesRes.error) throw valuesRes.error;
+        setCustomFieldValues(valuesRes.data || []);
+      }
       const fetchedSettings = settingsRes.data || {
         ranch_id: currentRanch.id,
         report_line1: '',
@@ -128,7 +150,7 @@ export function ReportsPage() {
 
   const exportInventoryCSV = () => {
     const present = animals.filter(a => a.status === 'PRESENT');
-    const data = present.map(formatAnimalForExport);
+    const data = present.map(a => formatAnimalForExport(a, customFields, customFieldValues));
     exportToCSV(data, Object.keys(data[0] || {}), 'HTBD_Inventory.csv');
   };
 
@@ -141,6 +163,51 @@ export function ReportsPage() {
       'Calf Tags': r.calves.map(c => c.tag_number || 'No tag').join(', '),
     }));
     exportToCSV(data, ['Mother Tag', 'Mother Name', 'Number of Calves', 'Calf Tags'], 'HTBD_Calves.csv');
+  };
+
+  const getCustomFieldValue = (animalId: string, fieldId: string): string | null => {
+    const value = customFieldValues.find(v => v.animal_id === animalId && v.field_id === fieldId);
+    return value?.value || null;
+  };
+
+  const formatCustomFieldDisplay = (field: CustomFieldDefinition, value: string | null): string => {
+    if (!value) return '-';
+
+    switch (field.field_type) {
+      case 'dollar':
+        const dollarValue = parseFloat(value);
+        return isNaN(dollarValue) ? value : `$${dollarValue.toFixed(2)}`;
+      case 'integer':
+        return value;
+      case 'decimal':
+        const decimalValue = parseFloat(value);
+        return isNaN(decimalValue) ? value : decimalValue.toFixed(2);
+      case 'text':
+      default:
+        return value;
+    }
+  };
+
+  const calculateCustomFieldTotals = (animalsList: Animal[]) => {
+    const totals: Record<string, number> = {};
+
+    customFields.forEach(field => {
+      if (field.include_in_totals) {
+        let total = 0;
+        animalsList.forEach(animal => {
+          const value = getCustomFieldValue(animal.id, field.id);
+          if (value) {
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+              total += numValue;
+            }
+          }
+        });
+        totals[field.id] = total;
+      }
+    });
+
+    return totals;
   };
 
   const exportSalesCSV = () => {
@@ -288,46 +355,76 @@ export function ReportsPage() {
               )}
 
               {currentReport === 'inventory' && (
-                <ReportSection>
-                  {presentAnimals.map(animal => {
-                    const animalMedical = medicalRecords.filter(m => m.animal_id === animal.id);
-                    return (
-                      <div key={animal.id} className="mb-4 border-b border-gray-100 pb-3 last:border-0">
-                        <div className="grid grid-cols-6 gap-2 text-sm">
-                          <div>
-                            <span className="font-medium text-gray-700">Tag:</span> {animal.tag_number || '-'}
+                <>
+                  <ReportSection>
+                    {presentAnimals.map(animal => {
+                      const animalMedical = medicalRecords.filter(m => m.animal_id === animal.id);
+                      return (
+                        <div key={animal.id} className="mb-4 border-b border-gray-100 pb-3 last:border-0">
+                          <div className="grid grid-cols-6 gap-2 text-sm">
+                            <div>
+                              <span className="font-medium text-gray-700">Tag:</span> {animal.tag_number || '-'}
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Name:</span> {animal.name || '-'}
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Sex:</span> {animal.sex}
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Age:</span> {calculateAge(animal.birth_date)}
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Birth:</span> {formatDateForDisplay(animal.birth_date)}
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Desc:</span> {animal.description || '-'}
+                            </div>
                           </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Name:</span> {animal.name || '-'}
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Sex:</span> {animal.sex}
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Age:</span> {calculateAge(animal.birth_date)}
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Birth:</span> {formatDateForDisplay(animal.birth_date)}
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Desc:</span> {animal.description || '-'}
-                          </div>
-                        </div>
-                        {animalMedical.length > 0 && (
-                          <div className="ml-6 mt-1 space-y-0.5">
-                            {animalMedical
-                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                              .map((m, idx) => (
-                                <div key={idx} className="text-xs text-gray-600">
-                                  <span className="font-medium">{formatDateForDisplay(m.date)}:</span> {m.description}
+                          {customFields.length > 0 && (
+                            <div className="grid grid-cols-6 gap-2 text-sm mt-2">
+                              {customFields.map(field => (
+                                <div key={field.id}>
+                                  <span className="font-medium text-gray-700">{field.field_name}:</span>{' '}
+                                  {formatCustomFieldDisplay(field, getCustomFieldValue(animal.id, field.id))}
                                 </div>
                               ))}
-                          </div>
-                        )}
+                            </div>
+                          )}
+                          {animalMedical.length > 0 && (
+                            <div className="ml-6 mt-1 space-y-0.5">
+                              {animalMedical
+                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                .map((m, idx) => (
+                                  <div key={idx} className="text-xs text-gray-600">
+                                    <span className="font-medium">{formatDateForDisplay(m.date)}:</span> {m.description}
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </ReportSection>
+                  {customFields.some(f => f.include_in_totals) && (
+                    <ReportSection title="Custom Field Totals">
+                      <div className="border-t-2 border-gray-900 pt-3">
+                        <ReportGrid
+                          items={customFields
+                            .filter(f => f.include_in_totals)
+                            .map(field => {
+                              const totals = calculateCustomFieldTotals(presentAnimals);
+                              const value = totals[field.id] || 0;
+                              return {
+                                label: `Total ${field.field_name}`,
+                                value: field.field_type === 'dollar' ? `$${value.toFixed(2)}` : value.toFixed(2)
+                              };
+                            })}
+                        />
                       </div>
-                    );
-                  })}
-                </ReportSection>
+                    </ReportSection>
+                  )}
+                </>
               )}
 
               {currentReport === 'calves' && (
@@ -353,50 +450,82 @@ export function ReportsPage() {
                       </div>
                     </ReportSection>
                   ) : (
-                    soldAnimals
-                      .sort((a, b) => new Date(b.exit_date || '').getTime() - new Date(a.exit_date || '').getTime())
-                      .map(animal => {
-                        const animalMedical = medicalRecords.filter(m => m.animal_id === animal.id);
-                        return (
-                          <div key={animal.id} className="mb-8 border-b border-gray-200 pb-6 last:border-0">
-                            <ReportSection title={`${animal.tag_number ? `Tag #${animal.tag_number}` : ''} ${animal.name || 'Unnamed'}`}>
-                              <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div>
-                                  <span className="font-medium">Sale Date:</span> {formatDateForDisplay(animal.exit_date)}
+                    <>
+                      {soldAnimals
+                        .sort((a, b) => new Date(b.exit_date || '').getTime() - new Date(a.exit_date || '').getTime())
+                        .map(animal => {
+                          const animalMedical = medicalRecords.filter(m => m.animal_id === animal.id);
+                          return (
+                            <div key={animal.id} className="mb-8 border-b border-gray-200 pb-6 last:border-0">
+                              <ReportSection title={`${animal.tag_number ? `Tag #${animal.tag_number}` : ''} ${animal.name || 'Unnamed'}`}>
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                  <div>
+                                    <span className="font-medium">Sale Date:</span> {formatDateForDisplay(animal.exit_date)}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Sex:</span> {animal.sex}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Birth Date:</span> {formatDateForDisplay(animal.birth_date)}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Age at Sale:</span> {calculateAge(animal.birth_date)}
+                                  </div>
+                                  {animal.description && (
+                                    <div className="col-span-2">
+                                      <span className="font-medium">Description:</span> {animal.description}
+                                    </div>
+                                  )}
+                                  {customFields.map(field => {
+                                    const value = getCustomFieldValue(animal.id, field.id);
+                                    if (value) {
+                                      return (
+                                        <div key={field.id}>
+                                          <span className="font-medium">{field.field_name}:</span> {formatCustomFieldDisplay(field, value)}
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })}
                                 </div>
-                                <div>
-                                  <span className="font-medium">Sex:</span> {animal.sex}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Birth Date:</span> {formatDateForDisplay(animal.birth_date)}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Age at Sale:</span> {calculateAge(animal.birth_date)}
-                                </div>
-                                {animal.description && (
-                                  <div className="col-span-2">
-                                    <span className="font-medium">Description:</span> {animal.description}
+                                {animalMedical.length > 0 && (
+                                  <div className="mt-4">
+                                    <h4 className="font-medium text-gray-900 mb-2">Medical History:</h4>
+                                    <ReportTable
+                                      headers={['Date', 'Treatment']}
+                                      rows={animalMedical
+                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                        .map(m => [
+                                          formatDateForDisplay(m.date),
+                                          m.description,
+                                        ])}
+                                    />
                                   </div>
                                 )}
-                              </div>
-                              {animalMedical.length > 0 && (
-                                <div className="mt-4">
-                                  <h4 className="font-medium text-gray-900 mb-2">Medical History:</h4>
-                                  <ReportTable
-                                    headers={['Date', 'Treatment']}
-                                    rows={animalMedical
-                                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                      .map(m => [
-                                        formatDateForDisplay(m.date),
-                                        m.description,
-                                      ])}
-                                  />
-                                </div>
-                              )}
-                            </ReportSection>
+                              </ReportSection>
+                            </div>
+                          );
+                        })
+                      }
+                      {customFields.some(f => f.include_in_totals) && (
+                        <ReportSection title="Custom Field Totals">
+                          <div className="border-t-2 border-gray-900 pt-3">
+                            <ReportGrid
+                              items={customFields
+                                .filter(f => f.include_in_totals)
+                                .map(field => {
+                                  const totals = calculateCustomFieldTotals(soldAnimals);
+                                  const value = totals[field.id] || 0;
+                                  return {
+                                    label: `Total ${field.field_name}`,
+                                    value: field.field_type === 'dollar' ? `$${value.toFixed(2)}` : value.toFixed(2)
+                                  };
+                                })}
+                            />
                           </div>
-                        );
-                      })
+                        </ReportSection>
+                      )}
+                    </>
                   )}
                 </>
               )}

@@ -305,6 +305,67 @@ export interface Database {
           user_agent?: string | null;
         };
       };
+      custom_field_definitions: {
+        Row: {
+          id: string;
+          ranch_id: string;
+          field_name: string;
+          field_type: 'text' | 'dollar' | 'integer' | 'decimal';
+          include_in_totals: boolean;
+          is_required: boolean;
+          display_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          ranch_id: string;
+          field_name: string;
+          field_type: 'text' | 'dollar' | 'integer' | 'decimal';
+          include_in_totals?: boolean;
+          is_required?: boolean;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          ranch_id?: string;
+          field_name?: string;
+          field_type?: 'text' | 'dollar' | 'integer' | 'decimal';
+          include_in_totals?: boolean;
+          is_required?: boolean;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      custom_field_values: {
+        Row: {
+          id: string;
+          animal_id: string;
+          field_id: string;
+          value: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          animal_id: string;
+          field_id: string;
+          value?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          animal_id?: string;
+          field_id?: string;
+          value?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 }
