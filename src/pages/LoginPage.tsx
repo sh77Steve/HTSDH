@@ -33,10 +33,13 @@ export function LoginPage() {
         </div>
 
         <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">
-          HTSDH Bovine Database
+          AmadorHerdInfo
         </h1>
         <p className="text-center text-gray-600 mb-8">
           Sign in to manage your ranch
+        </p>
+        <p className="text-center text-gray-500 text-xs mb-6">
+          by Amador Software
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -85,6 +88,14 @@ export function LoginPage() {
           </button>
         </form>
 
+        <div className="mt-6 text-center">
+          <p className="text-gray-600 text-sm">
+            Don't have an account?{' '}
+            <a href="/signup" className="text-green-600 hover:text-green-700 font-medium">
+              Sign up
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

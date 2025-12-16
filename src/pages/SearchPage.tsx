@@ -9,7 +9,7 @@ import type { Database } from '../lib/database.types';
 type Animal = Database['public']['Tables']['animals']['Row'];
 
 type SearchType = 'all' | 'tag' | 'name' | 'description';
-type StatusFilter = 'ALL' | 'PRESENT' | 'SOLD' | 'DEAD';
+type StatusFilter = 'ALL' | 'PRESENT' | 'SOLD' | 'BUTCHERED' | 'DEAD';
 
 export function SearchPage() {
   const { currentRanch } = useRanch();
@@ -32,8 +32,7 @@ export function SearchPage() {
       let query = supabase
         .from('animals')
         .select('*')
-        .eq('ranch_id', currentRanch.id)
-        .eq('is_active', true);
+        .eq('ranch_id', currentRanch.id);
 
       if (statusFilter !== 'ALL') {
         query = query.eq('status', statusFilter);
@@ -86,6 +85,8 @@ export function SearchPage() {
         return 'bg-green-100 text-green-800';
       case 'SOLD':
         return 'bg-blue-100 text-blue-800';
+      case 'BUTCHERED':
+        return 'bg-orange-100 text-orange-800';
       case 'DEAD':
         return 'bg-gray-100 text-gray-800';
       default:
@@ -145,6 +146,7 @@ export function SearchPage() {
                   <option value="ALL">All Statuses</option>
                   <option value="PRESENT">Present Only</option>
                   <option value="SOLD">Sold Only</option>
+                  <option value="BUTCHERED">Butchered Only</option>
                   <option value="DEAD">Dead Only</option>
                 </select>
               </div>

@@ -152,5 +152,6 @@ export function formatAnimalWithMedicalForExport(
   return {
     ...base,
     'Medical History': medical || 'None',
+    'Sale Price': animal.sale_price ? `$${Number(animal.sale_price).toFixed(2)}` : '',
   };
 }

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { PrintableReport, ReportSection, ReportTable, ReportGrid } from '../components/PrintableReport';
+import { ProrateSaleModal } from '../components/ProrateSaleModal';
 import { useRanch } from '../contexts/RanchContext';
 import { supabase } from '../lib/supabase';
-import { Printer, FileDown, Calendar, BarChart3 } from 'lucide-react';
+import { Printer, FileDown, Calendar, BarChart3, DollarSign } from 'lucide-react';
 import {
   generateCountsReport,
   generateCalvesByMotherReport,
@@ -34,6 +35,7 @@ export function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [currentReport, setCurrentReport] = useState<ReportType>(null);
   const [salesDate, setSalesDate] = useState<string>('');
+  const [showProrateSale, setShowProrateSale] = useState(false);
 
   useEffect(() => {
     if (currentRanch) {
@@ -50,8 +52,7 @@ export function ReportsPage() {
         supabase
           .from('animals')
           .select('*')
-          .eq('ranch_id', currentRanch.id)
-          .eq('is_active', true),
+          .eq('ranch_id', currentRanch.id),
         supabase
           .from('medical_history')
           .select('*')
@@ -145,13 +146,13 @@ export function ReportsPage() {
       { Category: 'Present Adults', Count: counts.presentAdults },
       { Category: 'Present Calves', Count: counts.presentCalves },
     ];
-    exportToCSV(reportData, ['Category', 'Count'], 'HTBD_Counts.csv');
+    exportToCSV(reportData, ['Category', 'Count'], 'AmadorHerdInfo_Counts.csv');
   };
 
   const exportInventoryCSV = () => {
     const present = animals.filter(a => a.status === 'PRESENT');
     const data = present.map(a => formatAnimalForExport(a, customFields, customFieldValues));
-    exportToCSV(data, Object.keys(data[0] || {}), 'HTBD_Inventory.csv');
+    exportToCSV(data, Object.keys(data[0] || {}), 'AmadorHerdInfo_Inventory.csv');
   };
 
   const exportCalvesCSV = () => {
@@ -162,7 +163,7 @@ export function ReportsPage() {
       'Number of Calves': r.calves.length,
       'Calf Tags': r.calves.map(c => c.tag_number || 'No tag').join(', '),
     }));
-    exportToCSV(data, ['Mother Tag', 'Mother Name', 'Number of Calves', 'Calf Tags'], 'HTBD_Calves.csv');
+    exportToCSV(data, ['Mother Tag', 'Mother Name', 'Number of Calves', 'Calf Tags'], 'AmadorHerdInfo_Calves.csv');
   };
 
   const getCustomFieldValue = (animalId: string, fieldId: string): string | null => {
@@ -221,8 +222,9 @@ export function ReportsPage() {
       'Sex': animal.sex,
       'Birth Date': animal.birth_date || '',
       'Description': animal.description || '',
+      'Sale Price': (animal as any).sale_price ? `$${parseFloat((animal as any).sale_price).toFixed(2)}` : '',
     }));
-    exportToCSV(data, Object.keys(data[0] || {}), 'HTBD_Sales.csv');
+    exportToCSV(data, Object.keys(data[0] || {}), 'AmadorHerdInfo_Sales.csv');
   };
 
   if (loading) {
@@ -259,6 +261,15 @@ export function ReportsPage() {
               ← Back to Reports
             </button>
             <div className="flex gap-2">
+              {currentReport === 'sales' && (
+                <button
+                  onClick={() => setShowProrateSale(true)}
+                  className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition"
+                >
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Prorate Sale
+                </button>
+              )}
               <button
                 onClick={handlePrint}
                 className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
@@ -471,6 +482,11 @@ export function ReportsPage() {
                                   <div>
                                     <span className="font-medium">Age at Sale:</span> {calculateAge(animal.birth_date)}
                                   </div>
+                                  {(animal as any).sale_price && (
+                                    <div>
+                                      <span className="font-medium">Sale Price:</span> ${parseFloat((animal as any).sale_price).toFixed(2)}
+                                    </div>
+                                  )}
                                   {animal.description && (
                                     <div className="col-span-2">
                                       <span className="font-medium">Description:</span> {animal.description}
@@ -525,6 +541,21 @@ export function ReportsPage() {
                           </div>
                         </ReportSection>
                       )}
+                      <ReportSection title="Sale Price Total">
+                        <div className="border-t-2 border-gray-900 pt-3">
+                          <ReportGrid
+                            items={[
+                              {
+                                label: 'Total Sale Price',
+                                value: `$${soldAnimals.reduce((sum, animal) => {
+                                  const price = (animal as any).sale_price;
+                                  return sum + (price ? parseFloat(price) : 0);
+                                }, 0).toFixed(2)}`
+                              }
+                            ]}
+                          />
+                        </div>
+                      </ReportSection>
                     </>
                   )}
                 </>
@@ -532,6 +563,17 @@ export function ReportsPage() {
             </PrintableReport>
           </div>
         </div>
+
+        {showProrateSale && currentRanch && (
+          <ProrateSaleModal
+            onClose={() => setShowProrateSale(false)}
+            onSuccess={() => {
+              fetchData();
+              setShowProrateSale(false);
+            }}
+            ranchId={currentRanch.id}
+          />
+        )}
       </Layout>
     );
   }

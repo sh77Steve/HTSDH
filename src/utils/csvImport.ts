@@ -55,10 +55,10 @@ function parseV1Date(dateStr: string | undefined): string | null {
   }
 }
 
-function parseV1Sex(sex: string | undefined): 'BULL' | 'COW' | 'STEER' | 'HEIFER' {
+function parseV1Sex(sex: string | undefined): 'BULL' | 'STEER' | 'HEIFER' {
   const normalized = (sex || '').toUpperCase().trim();
   if (normalized === 'BULL' || normalized === 'B') return 'BULL';
-  if (normalized === 'COW' || normalized === 'C') return 'COW';
+  if (normalized === 'COW' || normalized === 'C') return 'HEIFER';
   if (normalized === 'STEER' || normalized === 'S') return 'STEER';
   if (normalized === 'HEIFER' || normalized === 'H') return 'HEIFER';
   return 'BULL';
@@ -71,9 +71,10 @@ function parseV1Source(source: string | undefined): 'BORN' | 'PURCHASED' {
   return 'BORN';
 }
 
-function parseV1Status(status: string | undefined): 'PRESENT' | 'SOLD' | 'DEAD' {
+function parseV1Status(status: string | undefined): 'PRESENT' | 'SOLD' | 'BUTCHERED' | 'DEAD' {
   const normalized = (status || '').toUpperCase().trim();
   if (normalized === 'SOLD' || normalized === 'S') return 'SOLD';
+  if (normalized === 'BUTCHERED' || normalized === 'B') return 'BUTCHERED';
   if (normalized === 'DEAD' || normalized === 'D') return 'DEAD';
   if (normalized === 'PRESENT' || normalized === 'P') return 'PRESENT';
   return 'PRESENT';
@@ -166,7 +167,7 @@ export function convertV1Animal(
   },
   ranchId: string,
   uidToIdMap: Map<string, string>
-): Partial<Animal> {
+): Partial<Omit<Animal, 'sex'> & { sex: 'BULL' | 'STEER' | 'HEIFER' }> {
   const animal: Partial<Animal> = {
     ranch_id: ranchId,
     legacy_uid: row.uid || null,
@@ -181,7 +182,6 @@ export function convertV1Animal(
     exit_date: parseV1Date(row.exitDate),
     description: row.description || null,
     notes: row.notes || null,
-    is_active: true,
   };
 
   if (row.motherUID && uidToIdMap.has(row.motherUID)) {
@@ -238,19 +238,20 @@ function parseRanchRDate(dateStr: string | undefined): string | null {
   }
 }
 
-function parseRanchRSex(sex: string | undefined): 'BULL' | 'COW' | 'STEER' | 'HEIFER' {
+function parseRanchRSex(sex: string | undefined): 'BULL' | 'STEER' | 'HEIFER' {
   const normalized = (sex || '').toLowerCase().trim();
   if (normalized === 'bull') return 'BULL';
-  if (normalized === 'cow') return 'COW';
+  if (normalized === 'cow') return 'HEIFER';
   if (normalized === 'steer') return 'STEER';
   if (normalized === 'heifer') return 'HEIFER';
   if (normalized === 'calf') return 'HEIFER';
-  return 'COW';
+  return 'HEIFER';
 }
 
-function parseRanchRStatus(status: string | undefined): 'PRESENT' | 'SOLD' | 'DEAD' {
+function parseRanchRStatus(status: string | undefined): 'PRESENT' | 'SOLD' | 'BUTCHERED' | 'DEAD' {
   const normalized = (status || '').toLowerCase().trim();
   if (normalized === 'sold') return 'SOLD';
+  if (normalized === 'butchered') return 'BUTCHERED';
   if (normalized === 'deceased') return 'DEAD';
   if (normalized === 'active' || normalized === 'present') return 'PRESENT';
   if (normalized === 'archived') return 'PRESENT';
@@ -407,21 +408,46 @@ export function parseRanchRMedicalCSV(csvText: string): RanchRMedicalRow[] {
   }));
 }
 
+function splitTagNumberAndColor(tagInput: string | null): { tagNumber: string | null; tagColor: string | null } {
+  if (!tagInput) return { tagNumber: null, tagColor: null };
+
+  const validColors = [
+    'Yellow', 'Red', 'Blue', 'Green', 'Orange', 'White', 'Black',
+    'Purple', 'Pink', 'Brown', 'Gray', 'Grey', 'Lime', 'Teal',
+    'Cyan', 'Magenta', 'Navy', 'Maroon', 'Tan', 'Beige'
+  ];
+
+  for (const color of validColors) {
+    const pattern = new RegExp(`^(.+?)(${color})$`, 'i');
+    const match = tagInput.match(pattern);
+
+    if (match) {
+      const tagNumber = match[1].trim();
+      const tagColor = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+      return { tagNumber, tagColor };
+    }
+  }
+
+  return { tagNumber: tagInput, tagColor: null };
+}
+
 export function convertRanchRAnimal(
   row: RanchRAnimalRow | RanchRCalfRow,
   ranchId: string,
   primaryIdToIdMap: Map<string, string>
-): Partial<Animal> {
+): Partial<Omit<Animal, 'sex'> & { sex: 'BULL' | 'STEER' | 'HEIFER' }> {
   const primaryId = row.primaryId?.trim() || null;
   const name = row.secondaryId?.trim() || primaryId;
   const source = (row.owner?.toLowerCase().includes('purchased') || row.seller) ? 'PURCHASED' : 'BORN';
+
+  const { tagNumber, tagColor } = splitTagNumberAndColor(primaryId);
 
   const animal: Partial<Animal> = {
     ranch_id: ranchId,
     legacy_uid: primaryId,
     name: name,
-    tag_number: primaryId,
-    tag_color: null,
+    tag_number: tagNumber,
+    tag_color: tagColor,
     sex: parseRanchRSex(row.sex),
     source: source,
     status: parseRanchRStatus(row.status),
@@ -430,7 +456,6 @@ export function convertRanchRAnimal(
     exit_date: parseRanchRDate(row.deceasedDate || ('result' in row ? row.result : '')),
     description: row.herd || null,
     notes: null,
-    is_active: true,
   };
 
   if (row.motherId && primaryIdToIdMap.has(row.motherId)) {

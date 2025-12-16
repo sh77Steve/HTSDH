@@ -44,6 +44,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     birth_date: animal.birth_date || '',
     weaning_date: animal.weaning_date || '',
     exit_date: animal.exit_date || '',
+    sale_price: (animal as any).sale_price || '',
     mother_id: animal.mother_id || '',
     father_id: (animal as any).father_id || '',
     weight_lbs: (animal as any).weight_lbs || '',
@@ -67,6 +68,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           birth_date: formData.birth_date || null,
           weaning_date: formData.weaning_date || null,
           exit_date: formData.exit_date || null,
+          sale_price: formData.sale_price ? parseFloat(formData.sale_price as string) : null,
           mother_id: formData.mother_id || null,
           father_id: formData.father_id || null,
           weight_lbs: formData.weight_lbs ? parseFloat(formData.weight_lbs as string) : null,
@@ -113,14 +115,14 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this animal? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to permanently delete this animal and all its history? This action cannot be undone.')) {
       return;
     }
 
     try {
       const { error } = await supabase
         .from('animals')
-        .update({ is_active: false })
+        .delete()
         .eq('id', animal.id);
 
       if (error) throw error;
@@ -489,6 +491,13 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
               </div>
 
               <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">Sale Price</h3>
+                <p className="text-gray-900">
+                  {(animal as any).sale_price ? `$${parseFloat((animal as any).sale_price).toFixed(2)}` : '-'}
+                </p>
+              </div>
+
+              <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">Mother</h3>
                 <p className="text-gray-900">
                   {mother ? `${mother.tag_number ? `#${mother.tag_number}` : ''} ${mother.name || mother.description || 'Unknown'}` : '-'}
@@ -606,6 +615,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   >
                     <option value="PRESENT">Present</option>
                     <option value="SOLD">Sold</option>
+                    <option value="BUTCHERED">Butchered</option>
                     <option value="DEAD">Dead</option>
                   </select>
                 </div>
@@ -638,6 +648,21 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                     onChange={(e) => setFormData({ ...formData, exit_date: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.sale_price}
+                      onChange={(e) => setFormData({ ...formData, sale_price: e.target.value })}
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
 
                 <div>

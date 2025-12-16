@@ -1,12 +1,13 @@
 import { ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRanch } from '../contexts/RanchContext';
-import { LogOut, Home, Search, FileText, Settings, Menu, X } from 'lucide-react';
+import { LogOut, Home, Search, FileText, Settings, Menu, X, HelpCircle } from 'lucide-react';
 import { useState } from 'react';
+import LicenseWarningBanner from './LicenseWarningBanner';
 
 interface LayoutProps {
   children: ReactNode;
-  currentPage: 'animals' | 'search' | 'reports' | 'settings';
+  currentPage: 'animals' | 'search' | 'reports' | 'settings' | 'license';
 }
 
 export function Layout({ children, currentPage }: LayoutProps) {
@@ -27,6 +28,7 @@ export function Layout({ children, currentPage }: LayoutProps) {
     { name: 'Animals', icon: Home, page: 'animals', href: '/dashboard' },
     { name: 'Search', icon: Search, page: 'search', href: '/search' },
     { name: 'Reports', icon: FileText, page: 'reports', href: '/reports' },
+    { name: 'License / Help', icon: HelpCircle, page: 'license', href: '/license-help' },
     { name: 'Settings', icon: Settings, page: 'settings', href: '/settings' },
   ];
 
@@ -45,7 +47,7 @@ export function Layout({ children, currentPage }: LayoutProps) {
 
               <div className="flex-shrink-0 flex items-center ml-2 lg:ml-0">
                 <Home className="w-6 h-6 text-green-600" />
-                <span className="ml-2 text-xl font-bold text-gray-900">HTSDH</span>
+                <span className="ml-2 text-xl font-bold text-gray-900">AmadorHerdInfo</span>
               </div>
 
               <div className="hidden lg:ml-10 lg:flex lg:space-x-8">
@@ -143,6 +145,8 @@ export function Layout({ children, currentPage }: LayoutProps) {
           </div>
         </div>
       )}
+
+      <LicenseWarningBanner />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}

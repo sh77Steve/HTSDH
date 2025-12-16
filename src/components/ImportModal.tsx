@@ -17,6 +17,31 @@ interface ImportModalProps {
   onComplete: () => void;
 }
 
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  delayMs = 1000
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+
+      if (error.message?.includes('Failed to fetch') && attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
+}
+
 export function ImportModal({ onClose, onComplete }: ImportModalProps) {
   const { currentRanch } = useRanch();
   const { user } = useAuth();
@@ -52,6 +77,20 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
           errors: [],
         };
 
+        // Load existing animals to avoid duplicates
+        const { data: existingAnimals } = await supabase
+          .from('animals')
+          .select('id, legacy_uid')
+          .eq('ranch_id', currentRanch.id);
+
+        if (existingAnimals) {
+          for (const animal of existingAnimals) {
+            if (animal.legacy_uid) {
+              primaryIdToIdMap.set(animal.legacy_uid, animal.id);
+            }
+          }
+        }
+
         // Import cattle first
         if (cattleFile) {
           const cattleText = await cattleFile.text();
@@ -59,15 +98,32 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
 
           for (const row of cattleRows) {
             try {
+              // Skip if already exists
+              if (row.primaryId && primaryIdToIdMap.has(row.primaryId)) {
+                animalsResult.skipped++;
+                continue;
+              }
+
               const animalData = convertRanchRAnimal(row, currentRanch.id, primaryIdToIdMap);
 
-              const { data, error } = await supabase
-                .from('animals')
-                .insert(animalData as any)
-                .select('id, legacy_uid')
-                .single();
+              const { data, error } = await retryWithBackoff(async () => {
+                const result = await supabase
+                  .from('animals')
+                  .insert(animalData as any)
+                  .select('id, legacy_uid')
+                  .single();
 
-              if (error) throw error;
+                if (result.error) {
+                  throw result.error;
+                }
+
+                return result;
+              });
+
+              if (error) {
+                console.error('Supabase error for cattle:', row.primaryId, error);
+                throw new Error(`${error.message}${error.details ? ` (${error.details})` : ''}`);
+              }
 
               if (data && row.primaryId) {
                 primaryIdToIdMap.set(row.primaryId, data.id);
@@ -76,7 +132,8 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
               animalsResult.imported++;
             } catch (error: any) {
               console.error('Import error for cattle row:', row, error);
-              animalsResult.errors.push(`Cattle ${row.primaryId || 'unknown'}: ${error.message}`);
+              const errorMsg = error.message || 'Unknown error';
+              animalsResult.errors.push(`Row ${row.primaryId || 'unknown'}: ${errorMsg}`);
               animalsResult.skipped++;
             }
           }
@@ -89,15 +146,32 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
 
           for (const row of calfRows) {
             try {
+              // Skip if already exists
+              if (row.primaryId && primaryIdToIdMap.has(row.primaryId)) {
+                animalsResult.skipped++;
+                continue;
+              }
+
               const animalData = convertRanchRAnimal(row, currentRanch.id, primaryIdToIdMap);
 
-              const { data, error } = await supabase
-                .from('animals')
-                .insert(animalData as any)
-                .select('id, legacy_uid')
-                .single();
+              const { data, error } = await retryWithBackoff(async () => {
+                const result = await supabase
+                  .from('animals')
+                  .insert(animalData as any)
+                  .select('id, legacy_uid')
+                  .single();
 
-              if (error) throw error;
+                if (result.error) {
+                  throw result.error;
+                }
+
+                return result;
+              });
+
+              if (error) {
+                console.error('Supabase error for calf:', row.primaryId, error);
+                throw new Error(`${error.message}${error.details ? ` (${error.details})` : ''}`);
+              }
 
               if (data && row.primaryId) {
                 primaryIdToIdMap.set(row.primaryId, data.id);
@@ -106,7 +180,8 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
               animalsResult.imported++;
             } catch (error: any) {
               console.error('Import error for calf row:', row, error);
-              animalsResult.errors.push(`Calf ${row.primaryId || 'unknown'}: ${error.message}`);
+              const errorMsg = error.message || 'Unknown error';
+              animalsResult.errors.push(`Row ${row.primaryId || 'unknown'}: ${errorMsg}`);
               animalsResult.skipped++;
             }
           }
@@ -143,6 +218,20 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
           errors: [],
         };
 
+        // Load existing medical history to avoid duplicates
+        const existingMedicalMap = new Map<string, boolean>();
+        const { data: existingMedical } = await supabase
+          .from('medical_history')
+          .select('animal_id, date, description')
+          .eq('ranch_id', currentRanch.id);
+
+        if (existingMedical) {
+          for (const record of existingMedical) {
+            const key = `${record.animal_id}|${record.date}|${record.description}`;
+            existingMedicalMap.set(key, true);
+          }
+        }
+
         for (const medicalFile of medicalFiles) {
           const medicalText = await medicalFile.text();
           const medicalRows = parseRanchRMedicalCSV(medicalText);
@@ -156,10 +245,26 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
                 continue;
               }
 
-              const { error } = await supabase.from('medical_history').insert(medicalData as any);
+              // Check if this exact treatment already exists
+              const key = `${medicalData.animal_id}|${medicalData.date}|${medicalData.description}`;
+              if (existingMedicalMap.has(key)) {
+                medicalResult.skipped++;
+                continue;
+              }
+
+              const { error } = await retryWithBackoff(async () => {
+                const result = await supabase.from('medical_history').insert(medicalData as any);
+
+                if (result.error) {
+                  throw result.error;
+                }
+
+                return result;
+              });
 
               if (error) throw error;
 
+              existingMedicalMap.set(key, true);
               medicalResult.imported++;
             } catch (error: any) {
               medicalResult.errors.push(`Row ${row.cattle || 'unknown'}: ${error.message}`);
@@ -172,12 +277,6 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
       }
 
       setResult({ animals: animalsResult, medical: medicalResult });
-
-      if ((animalsResult && animalsResult.imported > 0) || (medicalResult && medicalResult.imported > 0)) {
-        setTimeout(() => {
-          onComplete();
-        }, 3000);
-      }
     } catch (error: any) {
       setResult({
         animals: {
@@ -444,15 +543,14 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
                     </p>
                     {result.animals.errors.length > 0 && (
                       <div className="mt-2">
-                        <p className="font-medium text-red-700">Errors:</p>
-                        <ul className="list-disc list-inside mt-1 text-red-700">
-                          {result.animals.errors.slice(0, 5).map((error, i) => (
-                            <li key={i}>{error}</li>
-                          ))}
-                          {result.animals.errors.length > 5 && (
-                            <li>...and {result.animals.errors.length - 5} more</li>
-                          )}
-                        </ul>
+                        <p className="font-medium text-red-700">Errors ({result.animals.errors.length}):</p>
+                        <div className="mt-1 max-h-48 overflow-y-auto">
+                          <ul className="list-disc list-inside text-red-700 space-y-0.5">
+                            {result.animals.errors.map((error, i) => (
+                              <li key={i} className="text-xs">{error}</li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -477,15 +575,14 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
                     </p>
                     {result.medical.errors.length > 0 && (
                       <div className="mt-2">
-                        <p className="font-medium text-red-700">Errors:</p>
-                        <ul className="list-disc list-inside mt-1 text-red-700">
-                          {result.medical.errors.slice(0, 5).map((error, i) => (
-                            <li key={i}>{error}</li>
-                          ))}
-                          {result.medical.errors.length > 5 && (
-                            <li>...and {result.medical.errors.length - 5} more</li>
-                          )}
-                        </ul>
+                        <p className="font-medium text-red-700">Errors ({result.medical.errors.length}):</p>
+                        <div className="mt-1 max-h-48 overflow-y-auto">
+                          <ul className="list-disc list-inside text-red-700 space-y-0.5">
+                            {result.medical.errors.map((error, i) => (
+                              <li key={i} className="text-xs">{error}</li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -494,7 +591,10 @@ export function ImportModal({ onClose, onComplete }: ImportModalProps) {
 
               <div className="flex justify-end pt-4">
                 <button
-                  onClick={onClose}
+                  onClick={() => {
+                    onComplete();
+                    onClose();
+                  }}
                   className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
                 >
                   Done

@@ -48,8 +48,11 @@ export function SignUpPage() {
         <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">
           Create Account
         </h1>
-        <p className="text-center text-gray-600 mb-8">
-          Get started with HTSDH Bovine Database
+        <p className="text-center text-gray-600 mb-6">
+          Get started with AmadorHerdInfo
+        </p>
+        <p className="text-center text-gray-500 text-xs mb-6">
+          by Amador Software
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">

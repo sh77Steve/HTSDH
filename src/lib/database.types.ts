@@ -8,8 +8,9 @@ export type Json =
 
 export type UserRole = 'ADMIN' | 'RANCHHAND' | 'VIEWER' | 'VET';
 export type AnimalSource = 'BORN' | 'PURCHASED';
-export type AnimalStatus = 'PRESENT' | 'SOLD' | 'DEAD';
+export type AnimalStatus = 'PRESENT' | 'SOLD' | 'BUTCHERED' | 'DEAD';
 export type AnimalSex = 'BULL' | 'STEER' | 'HEIFER';
+export type LicenseType = 'full' | 'demo';
 
 export interface Database {
   public: {
@@ -19,6 +20,10 @@ export interface Database {
           id: string;
           name: string;
           location: string | null;
+          active_license_key: string | null;
+          license_type: LicenseType | null;
+          license_expiration: string | null;
+          license_activated_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -26,6 +31,10 @@ export interface Database {
           id?: string;
           name: string;
           location?: string | null;
+          active_license_key?: string | null;
+          license_type?: LicenseType | null;
+          license_expiration?: string | null;
+          license_activated_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -33,6 +42,10 @@ export interface Database {
           id?: string;
           name?: string;
           location?: string | null;
+          active_license_key?: string | null;
+          license_type?: LicenseType | null;
+          license_expiration?: string | null;
+          license_activated_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -128,7 +141,6 @@ export interface Database {
           father_id: string | null;
           weight_lbs: number | null;
           notes: string | null;
-          is_active: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -150,7 +162,6 @@ export interface Database {
           father_id?: string | null;
           weight_lbs?: number | null;
           notes?: string | null;
-          is_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -172,7 +183,6 @@ export interface Database {
           father_id?: string | null;
           weight_lbs?: number | null;
           notes?: string | null;
-          is_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -364,6 +374,49 @@ export interface Database {
           value?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      admins: {
+        Row: {
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          created_at?: string;
+        };
+      };
+      license_keys: {
+        Row: {
+          id: string;
+          key: string;
+          license_type: LicenseType;
+          expiration_date: string;
+          used_by_ranch_id: string | null;
+          created_at: string;
+          created_by_user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          license_type: LicenseType;
+          expiration_date: string;
+          used_by_ranch_id?: string | null;
+          created_at?: string;
+          created_by_user_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          key?: string;
+          license_type?: LicenseType;
+          expiration_date?: string;
+          used_by_ranch_id?: string | null;
+          created_at?: string;
+          created_by_user_id?: string | null;
         };
       };
     };

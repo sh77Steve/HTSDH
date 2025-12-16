@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useRanch } from '../contexts/RanchContext';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Save, Trash2, Upload, Plus, Edit2, X } from 'lucide-react';
+import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb } from 'lucide-react';
 import { ImportModal } from '../components/ImportModal';
+import { TipsModal } from '../components/TipsModal';
 import type { Database } from '../lib/database.types';
 
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
 type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
 
 export function SettingsPage() {
-  const { currentRanch } = useRanch();
+  const { currentRanch, currentUserRole, refreshRanchData } = useRanch();
+  const { user } = useAuth();
   const [settings, setSettings] = useState<RanchSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -18,10 +21,14 @@ export function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDataImport, setShowDataImport] = useState(false);
+  const [showTipsModal, setShowTipsModal] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
   const [showFieldForm, setShowFieldForm] = useState(false);
   const [editingField, setEditingField] = useState<CustomFieldDefinition | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [ranchName, setRanchName] = useState('');
+  const [savingRanchName, setSavingRanchName] = useState(false);
   const [fieldForm, setFieldForm] = useState({
     field_name: '',
     field_type: 'text' as 'text' | 'dollar' | 'integer' | 'decimal',
@@ -33,8 +40,13 @@ export function SettingsPage() {
     if (currentRanch) {
       fetchSettings();
       fetchCustomFields();
+      setRanchName(currentRanch.name);
     }
   }, [currentRanch]);
+
+  useEffect(() => {
+    setIsAdmin(currentUserRole === 'ADMIN');
+  }, [currentUserRole]);
 
   const fetchSettings = async () => {
     if (!currentRanch) return;
@@ -95,6 +107,34 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveRanchName = async () => {
+    if (!currentRanch || !ranchName.trim()) {
+      setMessage({ type: 'error', text: 'Ranch name cannot be empty' });
+      return;
+    }
+
+    setSavingRanchName(true);
+    setMessage(null);
+
+    try {
+      const { error } = await supabase
+        .from('ranches')
+        .update({ name: ranchName.trim() })
+        .eq('id', currentRanch.id);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: 'Ranch name updated successfully' });
+      await refreshRanchData();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error saving ranch name:', error);
+      setMessage({ type: 'error', text: 'Failed to save ranch name' });
+    } finally {
+      setSavingRanchName(false);
     }
   };
 
@@ -289,6 +329,39 @@ export function SettingsPage() {
             {message.text}
           </div>
         )}
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Ranch Information</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Basic information about your ranch
+            </p>
+
+            <div className="flex gap-3 max-w-2xl">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ranch Name
+                </label>
+                <input
+                  type="text"
+                  value={ranchName}
+                  onChange={(e) => setRanchName(e.target.value)}
+                  placeholder="Enter ranch name"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleSaveRanchName}
+                  disabled={savingRanchName || !ranchName.trim() || ranchName === currentRanch?.name}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {savingRanchName ? 'Saving...' : 'Save Name'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
           <div>
@@ -583,6 +656,55 @@ export function SettingsPage() {
           </div>
         </div>
 
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Help & Resources</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Learn tips and tricks to get the most out of your ranch management system
+            </p>
+
+            <button
+              onClick={() => setShowTipsModal(true)}
+              className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 transition text-left w-full max-w-md"
+            >
+              <div className="flex-shrink-0 w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <Lightbulb className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Tips & Tricks</h3>
+                <p className="text-sm text-gray-600">View helpful tips and best practices</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {isAdmin && (
+          <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 space-y-6">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Shield className="w-6 h-6 text-blue-600" />
+                <h2 className="text-xl font-semibold text-blue-900">Admin Controls</h2>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Administrative tools for system management
+              </p>
+
+              <a
+                href="/license-management"
+                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left w-full max-w-md"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Key className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">License Management</h3>
+                  <p className="text-sm text-gray-600">Generate and manage license keys</p>
+                </div>
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-6">
           <div>
             <h2 className="text-xl font-semibold text-red-900 mb-4">Danger Zone</h2>
@@ -658,6 +780,11 @@ export function SettingsPage() {
           }}
         />
       )}
+
+      <TipsModal
+        isOpen={showTipsModal}
+        onClose={() => setShowTipsModal(false)}
+      />
     </Layout>
   );
 }

@@ -8,37 +8,54 @@ interface TermsModalProps {
   canClose?: boolean;
 }
 
-const TERMS_VERSION = '1.0';
+const TERMS_VERSION = '2.0';
 
 const TERMS_TEXT = `
-HTSDH BOVINE DATABASE - LIABILITY AGREEMENT
+HERDINFO - TERMS OF SERVICE AND SOFTWARE LICENSE
+by Amador Software
 
 By using this software, you agree to the following terms:
 
-1. NO WARRANTY
-This software is provided "as is" without warranty of any kind, either expressed or implied, including but not limited to the implied warranties of merchantability and fitness for a particular purpose.
+1. LICENSE GRANT
+Subject to these terms and payment of applicable license fees, you are granted a non-exclusive, non-transferable license to use this software for ranch management and cattle record-keeping purposes.
 
-2. LIMITATION OF LIABILITY
-In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
+2. SOFTWARE "AS IS"
+This software is provided "as is" without warranty of any kind, either expressed or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, and non-infringement.
 
-3. DATA RESPONSIBILITY
+3. USER RESPONSIBILITIES
 You are solely responsible for:
 - The accuracy and completeness of all data entered into the system
 - Maintaining adequate backups of your data
 - Compliance with all applicable laws and regulations regarding animal record keeping
 - Protecting access credentials and maintaining data security
+- Verifying all information before making business decisions
 
-4. USE AT YOUR OWN RISK
-The software is intended as a record-keeping tool only. All decisions regarding animal health, breeding, sales, and management remain your sole responsibility. Always consult with qualified professionals (veterinarians, agricultural advisors, etc.) before making important decisions.
+4. INTENDED USE
+This software is intended as a record-keeping and management tool only. It is designed to assist with organizing and tracking cattle-related information. All decisions regarding animal health, breeding, sales, and ranch management remain your sole responsibility.
 
-5. MEDICAL DISCLAIMER
-This software does not provide medical advice. The medical history features are for record-keeping purposes only. Always consult a licensed veterinarian for diagnosis, treatment, and medical advice.
+5. PROFESSIONAL CONSULTATION
+Always consult with qualified professionals (veterinarians, agricultural advisors, legal counsel, accountants, etc.) before making important decisions related to your ranch operations, animal health, or business matters.
 
-6. DATA PRIVACY
-While we implement security measures to protect your data, you acknowledge that no system is completely secure. You are responsible for maintaining the confidentiality of your account credentials.
+6. MEDICAL DISCLAIMER
+This software does not provide veterinary or medical advice. The medical history features are for record-keeping purposes only. For any health concerns, diagnosis, treatment, or medical advice regarding your animals, always consult a licensed veterinarian.
 
-7. CHANGES TO SOFTWARE
-The software may be updated, modified, or discontinued at any time without notice. We reserve the right to modify these terms at any time.
+7. DATA SECURITY AND PRIVACY
+While we implement reasonable security measures to protect your data, you acknowledge that no system can be completely secure. We use industry-standard practices to safeguard your information, but you remain responsible for maintaining the confidentiality of your account credentials.
+
+8. LICENSE COMPLIANCE
+You agree to use only valid, properly licensed copies of this software. Unauthorized use, distribution, or sharing of license keys is prohibited and may result in termination of your license.
+
+9. UPDATES AND MODIFICATIONS
+We may update, modify, or enhance the software from time to time. We reserve the right to modify these terms with notice to users. Continued use of the software after changes constitutes acceptance of the updated terms.
+
+10. TERMINATION
+Your license to use this software continues until terminated. Your rights under this license will terminate automatically if you fail to comply with any of these terms. Upon termination, you must cease all use of the software.
+
+11. LIMITATION OF LIABILITY
+To the maximum extent permitted by applicable law, in no event shall the software provider be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly, or any loss of data, use, goodwill, or other intangible losses resulting from your use of or inability to use the software.
+
+12. DISPUTE RESOLUTION
+Any disputes arising from the use of this software shall be resolved through good faith negotiation. If negotiation fails, disputes shall be resolved in accordance with applicable law.
 
 By clicking "I Accept" below, you acknowledge that you have read, understood, and agree to be bound by these terms and conditions.
 `.trim();

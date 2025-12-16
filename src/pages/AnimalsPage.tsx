@@ -3,17 +3,20 @@ import { Layout } from '../components/Layout';
 import { AnimalDetailModal } from '../components/AnimalDetailModal';
 import { ImportModal } from '../components/ImportModal';
 import { useRanch } from '../contexts/RanchContext';
+import { useToast } from '../contexts/ToastContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Upload, Trash2 } from 'lucide-react';
+import { Plus, Upload, Trash2, Lock } from 'lucide-react';
 import type { Database } from '../lib/database.types';
+import { canAddAnimal, getLicenseMessage } from '../utils/licenseEnforcement';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
 
 export function AnimalsPage() {
-  const { currentRanch } = useRanch();
+  const { currentRanch, licenseInfo } = useRanch();
+  const { showToast } = useToast();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'SOLD' | 'DEAD'>('PRESENT');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'SOLD' | 'DEAD' | 'BUTCHERED'>('PRESENT');
   const [sexFilter, setSexFilter] = useState<'ALL' | 'BULL' | 'COW' | 'STEER' | 'HEIFER'>('ALL');
   const [searchText, setSearchText] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -51,7 +54,6 @@ export function AnimalsPage() {
         .from('animals')
         .select('*')
         .eq('ranch_id', currentRanch.id)
-        .eq('is_active', true)
         .order('tag_number', { ascending: true });
 
       if (statusFilter !== 'ALL') {
@@ -99,6 +101,8 @@ export function AnimalsPage() {
         return 'bg-green-100 text-green-800';
       case 'SOLD':
         return 'bg-blue-100 text-blue-800';
+      case 'BUTCHERED':
+        return 'bg-orange-100 text-orange-800';
       case 'DEAD':
         return 'bg-gray-100 text-gray-800';
       default:
@@ -106,9 +110,42 @@ export function AnimalsPage() {
     }
   };
 
+  const handleOpenAddModal = async () => {
+    if (!currentRanch) return;
+
+    const { count } = await supabase
+      .from('animals')
+      .select('*', { count: 'exact', head: true })
+      .eq('ranch_id', currentRanch.id);
+
+    const totalAnimals = count || 0;
+
+    if (!canAddAnimal(licenseInfo, totalAnimals)) {
+      const message = getLicenseMessage(licenseInfo, totalAnimals);
+      if (message) {
+        showToast(message, 'error');
+      }
+      return;
+    }
+
+    setShowAddModal(true);
+  };
+
   const handleAddAnimal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentRanch) return;
+
+    const { count } = await supabase
+      .from('animals')
+      .select('*', { count: 'exact', head: true })
+      .eq('ranch_id', currentRanch.id);
+
+    const totalAnimals = count || 0;
+
+    if (!canAddAnimal(licenseInfo, totalAnimals)) {
+      showToast('Cannot add animals with current license status', 'error');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -127,7 +164,6 @@ export function AnimalsPage() {
         description: formData.description || null,
         notes: formData.notes || null,
         status: 'PRESENT',
-        is_active: true,
       });
 
       if (error) throw error;
@@ -169,17 +205,25 @@ export function AnimalsPage() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowImportModal(true)}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+              onClick={() => {
+                if (licenseInfo.isReadOnly) {
+                  showToast('Cannot import in read-only mode. Please activate a valid license.', 'error');
+                } else {
+                  setShowImportModal(true);
+                }
+              }}
+              disabled={licenseInfo.isReadOnly}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Upload className="w-5 h-5 mr-2" />
+              {licenseInfo.isReadOnly ? <Lock className="w-5 h-5 mr-2" /> : <Upload className="w-5 h-5 mr-2" />}
               Import CSV
             </button>
             <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+              onClick={handleOpenAddModal}
+              disabled={licenseInfo.isReadOnly}
+              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Plus className="w-5 h-5 mr-2" />
+              {licenseInfo.isReadOnly ? <Lock className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
               Add Animal
             </button>
           </div>
@@ -203,6 +247,7 @@ export function AnimalsPage() {
               <option value="PRESENT">Present</option>
               <option value="ALL">All Statuses</option>
               <option value="SOLD">Sold</option>
+              <option value="BUTCHERED">Butchered</option>
               <option value="DEAD">Dead</option>
             </select>
 

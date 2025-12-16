@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import type { Database } from '../lib/database.types';
+import { checkLicenseStatus, type LicenseInfo } from '../utils/licenseEnforcement';
 
 type Ranch = Database['public']['Tables']['ranches']['Row'];
 type UserRanch = Database['public']['Tables']['user_ranches']['Row'];
@@ -10,9 +11,12 @@ interface RanchContextType {
   currentRanch: Ranch | null;
   userRanches: (UserRanch & { ranch: Ranch })[];
   loading: boolean;
+  licenseInfo: LicenseInfo;
+  currentUserRole: string | null;
   selectRanch: (ranchId: string) => void;
   createRanch: (name: string, location?: string) => Promise<void>;
   refreshRanches: () => Promise<void>;
+  refreshRanchData: () => Promise<void>;
 }
 
 const RanchContext = createContext<RanchContextType | undefined>(undefined);
@@ -22,6 +26,8 @@ export function RanchProvider({ children }: { children: ReactNode }) {
   const [currentRanch, setCurrentRanch] = useState<Ranch | null>(null);
   const [userRanches, setUserRanches] = useState<(UserRanch & { ranch: Ranch })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo>(checkLicenseStatus(null));
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   const fetchUserRanches = async () => {
     if (!user) {
@@ -53,8 +59,10 @@ export function RanchProvider({ children }: { children: ReactNode }) {
       if (savedRanchId && ranches.find(r => r.ranch_id === savedRanchId)) {
         const ranch = ranches.find(r => r.ranch_id === savedRanchId);
         setCurrentRanch(ranch?.ranch || null);
+        setCurrentUserRole(ranch?.role || null);
       } else if (ranches.length > 0) {
         setCurrentRanch(ranches[0].ranch);
+        setCurrentUserRole(ranches[0].role);
         localStorage.setItem('currentRanchId', ranches[0].ranch_id);
       }
     } catch (error) {
@@ -68,10 +76,15 @@ export function RanchProvider({ children }: { children: ReactNode }) {
     fetchUserRanches();
   }, [user]);
 
+  useEffect(() => {
+    setLicenseInfo(checkLicenseStatus(currentRanch));
+  }, [currentRanch]);
+
   const selectRanch = (ranchId: string) => {
     const ranch = userRanches.find(r => r.ranch_id === ranchId);
     if (ranch) {
       setCurrentRanch(ranch.ranch);
+      setCurrentUserRole(ranch.role);
       localStorage.setItem('currentRanchId', ranchId);
     }
   };
@@ -79,31 +92,11 @@ export function RanchProvider({ children }: { children: ReactNode }) {
   const createRanch = async (name: string, location?: string) => {
     if (!user) throw new Error('Must be logged in to create a ranch');
 
-    const { data: ranch, error: ranchError } = await supabase
+    const { error } = await supabase
       .from('ranches')
-      .insert({ name, location })
-      .select()
-      .single();
+      .insert({ name, location });
 
-    if (ranchError) throw ranchError;
-
-    const { error: userRanchError } = await supabase
-      .from('user_ranches')
-      .insert({
-        user_id: user.id,
-        ranch_id: ranch.id,
-        role: 'ADMIN',
-      });
-
-    if (userRanchError) throw userRanchError;
-
-    const { error: settingsError } = await supabase
-      .from('ranch_settings')
-      .insert({
-        ranch_id: ranch.id,
-      });
-
-    if (settingsError) throw settingsError;
+    if (error) throw error;
 
     await fetchUserRanches();
   };
@@ -112,14 +105,34 @@ export function RanchProvider({ children }: { children: ReactNode }) {
     await fetchUserRanches();
   };
 
+  const refreshRanchData = async () => {
+    if (!currentRanch) return;
+
+    const { data, error } = await supabase
+      .from('ranches')
+      .select('*')
+      .eq('id', currentRanch.id)
+      .single();
+
+    if (error) {
+      console.error('Error refreshing ranch data:', error);
+      return;
+    }
+
+    setCurrentRanch(data);
+  };
+
   return (
     <RanchContext.Provider value={{
       currentRanch,
       userRanches,
       loading,
+      licenseInfo,
+      currentUserRole,
       selectRanch,
       createRanch,
       refreshRanches,
+      refreshRanchData,
     }}>
       {children}
     </RanchContext.Provider>

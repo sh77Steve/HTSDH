@@ -3,11 +3,14 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RanchProvider, useRanch } from './contexts/RanchContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LoginPage } from './pages/LoginPage';
+import { SignUpPage } from './pages/SignUpPage';
 import { RanchSelector } from './pages/RanchSelector';
 import { AnimalsPage } from './pages/AnimalsPage';
 import { SearchPage } from './pages/SearchPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import LicenseManagementPage from './pages/LicenseManagementPage';
+import { LicenseHelpPage } from './pages/LicenseHelpPage';
 import { TermsModal } from './components/TermsModal';
 
 function AppContent() {
@@ -48,6 +51,9 @@ function AppContent() {
   }
 
   if (!user) {
+    if (currentRoute === '/signup') {
+      return <SignUpPage />;
+    }
     return <LoginPage />;
   }
 
@@ -66,6 +72,10 @@ function AppContent() {
       return <ReportsPage />;
     case '/settings':
       return <SettingsPage />;
+    case '/license-management':
+      return <LicenseManagementPage />;
+    case '/license-help':
+      return <LicenseHelpPage />;
     case '/dashboard':
     case '/':
     default:
