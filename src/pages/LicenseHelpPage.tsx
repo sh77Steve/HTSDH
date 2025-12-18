@@ -298,7 +298,7 @@ export function LicenseHelpPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Messages</h2>
           <p className="text-sm text-gray-600 mb-4">
-            Last 3 messages with HTSDH Bovine Support
+            Last 3 messages with AmadorHerdInfo Support
           </p>
 
           <MessageList

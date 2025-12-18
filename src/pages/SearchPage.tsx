@@ -4,18 +4,21 @@ import { AnimalDetailModal } from '../components/AnimalDetailModal';
 import { useRanch } from '../contexts/RanchContext';
 import { supabase } from '../lib/supabase';
 import { Search } from 'lucide-react';
+import { ANIMAL_TYPES, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
 
 type SearchType = 'all' | 'tag' | 'name' | 'description';
 type StatusFilter = 'ALL' | 'PRESENT' | 'SOLD' | 'BUTCHERED' | 'DEAD';
+type AnimalTypeFilter = 'ALL' | AnimalType;
 
 export function SearchPage() {
   const { currentRanch } = useRanch();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState<SearchType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [animalTypeFilter, setAnimalTypeFilter] = useState<AnimalTypeFilter>('ALL');
   const [results, setResults] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -36,6 +39,10 @@ export function SearchPage() {
 
       if (statusFilter !== 'ALL') {
         query = query.eq('status', statusFilter);
+      }
+
+      if (animalTypeFilter !== 'ALL') {
+        query = query.eq('animal_type', animalTypeFilter);
       }
 
       if (searchTerm.trim()) {
@@ -117,7 +124,7 @@ export function SearchPage() {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search Type
@@ -136,7 +143,7 @@ export function SearchPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Animals to Include
+                  Status
                 </label>
                 <select
                   value={statusFilter}
@@ -148,6 +155,22 @@ export function SearchPage() {
                   <option value="SOLD">Sold Only</option>
                   <option value="BUTCHERED">Butchered Only</option>
                   <option value="DEAD">Dead Only</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Animal Type
+                </label>
+                <select
+                  value={animalTypeFilter}
+                  onChange={(e) => setAnimalTypeFilter(e.target.value as AnimalTypeFilter)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="ALL">All Types</option>
+                  {ANIMAL_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
               </div>
 

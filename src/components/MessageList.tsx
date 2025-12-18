@@ -98,7 +98,7 @@ export function MessageList({ ranchId, isAdmin = false, limit }: MessageListProp
                 <Mail className="w-4 h-4 text-blue-600" />
               )}
               <span className="text-sm font-semibold text-gray-900">
-                {message.from_admin ? 'HTSDH Bovine Support' : 'You'}
+                {message.from_admin ? 'AmadorHerdInfo Support' : 'You'}
               </span>
             </div>
             <span className="text-xs text-gray-500">

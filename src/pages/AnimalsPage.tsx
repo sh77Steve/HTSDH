@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { Plus, Upload, Trash2, Lock } from 'lucide-react';
 import type { Database } from '../lib/database.types';
 import { canAddAnimal, getLicenseMessage } from '../utils/licenseEnforcement';
+import { ANIMAL_TYPES, getSexOptions, type AnimalType } from '../utils/animalTypes';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
 
@@ -17,7 +18,8 @@ export function AnimalsPage() {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'SOLD' | 'DEAD' | 'BUTCHERED'>('PRESENT');
-  const [sexFilter, setSexFilter] = useState<'ALL' | 'BULL' | 'COW' | 'STEER' | 'HEIFER'>('ALL');
+  const [animalTypeFilter, setAnimalTypeFilter] = useState<'ALL' | AnimalType>('ALL');
+  const [sexFilter, setSexFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -28,7 +30,8 @@ export function AnimalsPage() {
     tag_number: '',
     tag_color: '',
     name: '',
-    sex: 'BULL' as 'BULL' | 'COW' | 'STEER' | 'HEIFER',
+    animal_type: 'Cattle' as AnimalType,
+    sex: 'BULL' as any,
     source: 'BORN' as 'BORN' | 'PURCHASED',
     birth_date: '',
     weaning_date: '',
@@ -43,7 +46,7 @@ export function AnimalsPage() {
     if (currentRanch) {
       fetchAnimals();
     }
-  }, [currentRanch, statusFilter, sexFilter, searchText]);
+  }, [currentRanch, statusFilter, animalTypeFilter, sexFilter, searchText]);
 
   const fetchAnimals = async () => {
     if (!currentRanch) return;
@@ -58,6 +61,10 @@ export function AnimalsPage() {
 
       if (statusFilter !== 'ALL') {
         query = query.eq('status', statusFilter);
+      }
+
+      if (animalTypeFilter !== 'ALL') {
+        query = query.eq('animal_type', animalTypeFilter);
       }
 
       if (sexFilter !== 'ALL') {
@@ -128,6 +135,31 @@ export function AnimalsPage() {
       return;
     }
 
+    const { data: settings } = await supabase
+      .from('ranch_settings')
+      .select('default_animal_type')
+      .eq('ranch_id', currentRanch.id)
+      .maybeSingle();
+
+    const defaultType = (settings?.default_animal_type as AnimalType) || 'Cattle';
+    const sexOptions = getSexOptions(defaultType);
+
+    setFormData({
+      tag_number: '',
+      tag_color: '',
+      name: '',
+      animal_type: defaultType,
+      sex: sexOptions[0].toUpperCase() as any,
+      source: 'BORN',
+      birth_date: '',
+      weaning_date: '',
+      exit_date: '',
+      mother_id: '',
+      father_id: '',
+      notes: '',
+      description: '',
+    });
+
     setShowAddModal(true);
   };
 
@@ -154,6 +186,7 @@ export function AnimalsPage() {
         tag_number: formData.tag_number || null,
         tag_color: formData.tag_color || null,
         name: formData.name || null,
+        animal_type: formData.animal_type,
         sex: formData.sex,
         source: formData.source,
         birth_date: formData.birth_date || null,
@@ -173,6 +206,7 @@ export function AnimalsPage() {
         tag_number: '',
         tag_color: '',
         name: '',
+        animal_type: 'Cattle',
         sex: 'BULL',
         source: 'BORN',
         birth_date: '',
@@ -230,13 +264,13 @@ export function AnimalsPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <input
               type="text"
               placeholder="Search tag, name, or description..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="md:col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="md:col-span-2 lg:col-span-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
 
             <select
@@ -252,15 +286,43 @@ export function AnimalsPage() {
             </select>
 
             <select
+              value={animalTypeFilter}
+              onChange={(e) => setAnimalTypeFilter(e.target.value as any)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value="ALL">All Types</option>
+              {ANIMAL_TYPES.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+
+            <select
               value={sexFilter}
-              onChange={(e) => setSexFilter(e.target.value as any)}
+              onChange={(e) => setSexFilter(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="ALL">All Sexes</option>
-              <option value="BULL">Bulls</option>
-              <option value="COW">Cows</option>
-              <option value="STEER">Steers</option>
-              <option value="HEIFER">Heifers</option>
+              {animalTypeFilter !== 'ALL' ? (
+                getSexOptions(animalTypeFilter).map(sex => (
+                  <option key={sex} value={sex.toUpperCase()}>{sex}</option>
+                ))
+              ) : (
+                <>
+                  <option value="BULL">Bull</option>
+                  <option value="COW">Cow</option>
+                  <option value="STEER">Steer</option>
+                  <option value="HEIFER">Heifer</option>
+                  <option value="STALLION">Stallion</option>
+                  <option value="MARE">Mare</option>
+                  <option value="GELDING">Gelding</option>
+                  <option value="RAM">Ram</option>
+                  <option value="EWE">Ewe</option>
+                  <option value="BUCK">Buck</option>
+                  <option value="DOE">Doe</option>
+                  <option value="BOAR">Boar</option>
+                  <option value="SOW">Sow</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -417,20 +479,41 @@ export function AnimalsPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Animal Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.animal_type}
+                      onChange={(e) => {
+                        const newType = e.target.value as AnimalType;
+                        const sexOptions = getSexOptions(newType);
+                        setFormData({
+                          ...formData,
+                          animal_type: newType,
+                          sex: sexOptions[0].toUpperCase() as any
+                        });
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    >
+                      {ANIMAL_TYPES.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Sex <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={formData.sex}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sex: e.target.value as 'BULL' | 'COW' | 'STEER' | 'HEIFER' })
-                      }
+                      onChange={(e) => setFormData({ ...formData, sex: e.target.value as any })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     >
-                      <option value="BULL">Bull</option>
-                      <option value="COW">Cow</option>
-                      <option value="STEER">Steer</option>
-                      <option value="HEIFER">Heifer</option>
+                      {getSexOptions(formData.animal_type).map(sex => (
+                        <option key={sex} value={sex.toUpperCase()}>{sex}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -499,7 +582,12 @@ export function AnimalsPage() {
                     >
                       <option value="">Select mother...</option>
                       {animals
-                        .filter(a => a.sex === 'COW' || a.sex === 'HEIFER')
+                        .filter(a => {
+                          const animalType = (a as any).animal_type || 'Cattle';
+                          if (animalType !== formData.animal_type) return false;
+                          const sex = a.sex.toUpperCase();
+                          return ['COW', 'HEIFER', 'MARE', 'FILLY', 'EWE', 'DOE', 'SOW', 'GILT'].includes(sex);
+                        })
                         .map(a => (
                           <option key={a.id} value={a.id}>
                             {a.tag_number ? `#${a.tag_number}` : ''} {a.name || a.description || 'Unknown'}
@@ -519,7 +607,12 @@ export function AnimalsPage() {
                     >
                       <option value="">Select father...</option>
                       {animals
-                        .filter(a => a.sex === 'BULL' || a.sex === 'STEER')
+                        .filter(a => {
+                          const animalType = (a as any).animal_type || 'Cattle';
+                          if (animalType !== formData.animal_type) return false;
+                          const sex = a.sex.toUpperCase();
+                          return ['BULL', 'STEER', 'STALLION', 'GELDING', 'COLT', 'RAM', 'WETHER', 'BUCK', 'BOAR', 'BARROW'].includes(sex);
+                        })
                         .map(a => (
                           <option key={a.id} value={a.id}>
                             {a.tag_number ? `#${a.tag_number}` : ''} {a.name || a.description || 'Unknown'}
@@ -564,6 +657,7 @@ export function AnimalsPage() {
                         tag_number: '',
                         tag_color: '',
                         name: '',
+                        animal_type: 'Cattle',
                         sex: 'BULL',
                         source: 'BORN',
                         birth_date: '',

@@ -77,7 +77,9 @@ export default function LicenseManagementPage() {
   }, [user]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin === true) {
+      setRanches([]);
+      setLicenseKeys([]);
       loadLicenseKeys();
       loadRanches();
     }

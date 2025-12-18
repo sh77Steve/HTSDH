@@ -3,13 +3,22 @@ import { Layout } from '../components/Layout';
 import { useRanch } from '../contexts/RanchContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb } from 'lucide-react';
+import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb, Syringe } from 'lucide-react';
 import { ImportModal } from '../components/ImportModal';
 import { TipsModal } from '../components/TipsModal';
+import { ANIMAL_TYPES, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
 
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
 type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
+
+interface Drug {
+  id: string;
+  drug_name: string;
+  ccs_per_pound: number | null;
+  fixed_dose_ml: number | null;
+  notes: string | null;
+}
 
 export function SettingsPage() {
   const { currentRanch, currentUserRole, refreshRanchData } = useRanch();
@@ -36,10 +45,23 @@ export function SettingsPage() {
     is_required: false,
   });
 
+  const [drugs, setDrugs] = useState<Drug[]>([]);
+  const [showDrugForm, setShowDrugForm] = useState(false);
+  const [editingDrug, setEditingDrug] = useState<Drug | null>(null);
+  const [drugForm, setDrugForm] = useState({
+    drug_name: '',
+    animal_type: 'Cattle' as AnimalType,
+    dose_type: 'per_pound' as 'per_pound' | 'fixed',
+    ccs_per_pound: '',
+    fixed_dose_ml: '',
+    notes: '',
+  });
+
   useEffect(() => {
     if (currentRanch) {
       fetchSettings();
       fetchCustomFields();
+      fetchDrugs();
       setRanchName(currentRanch.name);
     }
   }, [currentRanch]);
@@ -94,6 +116,12 @@ export function SettingsPage() {
           report_line1: settings.report_line1,
           report_line2: settings.report_line2,
           adult_age_years: settings.adult_age_years,
+          default_animal_type: (settings as any).default_animal_type,
+          cattle_adult_age: (settings as any).cattle_adult_age,
+          horse_adult_age: (settings as any).horse_adult_age,
+          sheep_adult_age: (settings as any).sheep_adult_age,
+          goat_adult_age: (settings as any).goat_adult_age,
+          pig_adult_age: (settings as any).pig_adult_age,
           print_program: (settings as any).print_program || '',
         })
         .eq('ranch_id', currentRanch.id);
@@ -246,6 +274,125 @@ export function SettingsPage() {
     } catch (error: any) {
       console.error('Error deleting custom field:', error);
       setMessage({ type: 'error', text: 'Failed to delete custom field' });
+    }
+  };
+
+  const fetchDrugs = async () => {
+    if (!currentRanch) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('drugs')
+        .select('*')
+        .eq('ranch_id', currentRanch.id)
+        .order('drug_name', { ascending: true });
+
+      if (error) throw error;
+      setDrugs(data || []);
+    } catch (error) {
+      console.error('Error fetching drugs:', error);
+    }
+  };
+
+  const handleAddDrug = () => {
+    setEditingDrug(null);
+    setDrugForm({
+      drug_name: '',
+      animal_type: 'Cattle',
+      dose_type: 'per_pound',
+      ccs_per_pound: '',
+      fixed_dose_ml: '',
+      notes: '',
+    });
+    setShowDrugForm(true);
+  };
+
+  const handleEditDrug = (drug: Drug) => {
+    setEditingDrug(drug);
+    setDrugForm({
+      drug_name: drug.drug_name,
+      animal_type: ((drug as any).animal_type || 'Cattle') as AnimalType,
+      dose_type: drug.ccs_per_pound !== null ? 'per_pound' : 'fixed',
+      ccs_per_pound: drug.ccs_per_pound?.toString() || '',
+      fixed_dose_ml: drug.fixed_dose_ml?.toString() || '',
+      notes: drug.notes || '',
+    });
+    setShowDrugForm(true);
+  };
+
+  const handleSaveDrug = async () => {
+    if (!currentRanch || !drugForm.drug_name.trim()) {
+      setMessage({ type: 'error', text: 'Drug name is required' });
+      return;
+    }
+
+    if (drugForm.dose_type === 'per_pound' && !drugForm.ccs_per_pound) {
+      setMessage({ type: 'error', text: 'CCs per pound is required for per-pound dosing' });
+      return;
+    }
+
+    if (drugForm.dose_type === 'fixed' && !drugForm.fixed_dose_ml) {
+      setMessage({ type: 'error', text: 'Fixed dose is required for fixed dosing' });
+      return;
+    }
+
+    try {
+      const drugData = {
+        drug_name: drugForm.drug_name.trim(),
+        animal_type: drugForm.animal_type,
+        ccs_per_pound: drugForm.dose_type === 'per_pound' ? parseFloat(drugForm.ccs_per_pound) : null,
+        fixed_dose_ml: drugForm.dose_type === 'fixed' ? parseFloat(drugForm.fixed_dose_ml) : null,
+        notes: drugForm.notes.trim() || null,
+      };
+
+      if (editingDrug) {
+        const { error } = await supabase
+          .from('drugs')
+          .update(drugData)
+          .eq('id', editingDrug.id);
+
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Drug updated successfully' });
+      } else {
+        const { error } = await supabase
+          .from('drugs')
+          .insert({
+            ...drugData,
+            ranch_id: currentRanch.id,
+          });
+
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Drug added successfully' });
+      }
+
+      setShowDrugForm(false);
+      await fetchDrugs();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error('Error saving drug:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to save drug' });
+    }
+  };
+
+  const handleDeleteDrug = async (drugId: string) => {
+    if (!confirm('Are you sure you want to delete this drug?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('drugs')
+        .delete()
+        .eq('id', drugId);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: 'Drug deleted successfully' });
+      await fetchDrugs();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error('Error deleting drug:', error);
+      setMessage({ type: 'error', text: 'Failed to delete drug' });
     }
   };
 
@@ -404,25 +551,134 @@ export function SettingsPage() {
           </div>
 
           <div className="border-t border-gray-200 pt-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Animal Classification</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Animal Settings</h2>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Adult Age Threshold (years)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={settings.adult_age_years || ''}
-                onChange={(e) =>
-                  setSettings({ ...settings, adult_age_years: e.target.value })
-                }
-                className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Animals younger than this age are considered calves in reports
-              </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Default Animal Type
+                </label>
+                <select
+                  value={(settings as any).default_animal_type || 'Cattle'}
+                  onChange={(e) =>
+                    setSettings({ ...settings, default_animal_type: e.target.value } as any)
+                  }
+                  className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  {ANIMAL_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-500 mt-1">
+                  Default animal type when adding new animals
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Adult Age Threshold (years) - Legacy Setting
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={settings.adult_age_years || ''}
+                  onChange={(e) =>
+                    setSettings({ ...settings, adult_age_years: e.target.value })
+                  }
+                  className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Legacy setting - use animal-specific thresholds below
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cattle Adult Age (years)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={(settings as any).cattle_adult_age || 2.0}
+                    onChange={(e) =>
+                      setSettings({ ...settings, cattle_adult_age: parseFloat(e.target.value) } as any)
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Heifer becomes Cow</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Horse Adult Age (years)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={(settings as any).horse_adult_age || 4.0}
+                    onChange={(e) =>
+                      setSettings({ ...settings, horse_adult_age: parseFloat(e.target.value) } as any)
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Filly becomes Mare, Colt becomes Stallion</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sheep Adult Age (years)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={(settings as any).sheep_adult_age || 1.0}
+                    onChange={(e) =>
+                      setSettings({ ...settings, sheep_adult_age: parseFloat(e.target.value) } as any)
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Standard maturity age</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Goat Adult Age (years)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={(settings as any).goat_adult_age || 1.0}
+                    onChange={(e) =>
+                      setSettings({ ...settings, goat_adult_age: parseFloat(e.target.value) } as any)
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Standard maturity age</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Pig Adult Age (years)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={(settings as any).pig_adult_age || 0.75}
+                    onChange={(e) =>
+                      setSettings({ ...settings, pig_adult_age: parseFloat(e.target.value) } as any)
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Standard maturity age</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -624,6 +880,194 @@ export function SettingsPage() {
                   className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
                 >
                   {editingField ? 'Update' : 'Add'} Field
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Drugs & Medications</h2>
+              <p className="text-sm text-gray-600">
+                Manage the drugs and medications used for your cattle
+              </p>
+            </div>
+            <button
+              onClick={handleAddDrug}
+              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Add Drug
+            </button>
+          </div>
+
+          {drugs.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Drug Name</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Dosage</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Notes</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {drugs.map((drug) => (
+                    <tr key={drug.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">{drug.drug_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {drug.ccs_per_pound !== null
+                          ? `${drug.ccs_per_pound} ml/lb`
+                          : drug.fixed_dose_ml !== null
+                          ? `${drug.fixed_dose_ml} ml (fixed)`
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{drug.notes || '-'}</td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        <button
+                          onClick={() => handleEditDrug(drug)}
+                          className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded transition"
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDrug(drug.id)}
+                          className="inline-flex items-center px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded transition"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No drugs defined. Click "Add Drug" to create one.
+            </div>
+          )}
+        </div>
+
+        {showDrugForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {editingDrug ? 'Edit Drug' : 'Add Drug'}
+                </h3>
+                <button
+                  onClick={() => setShowDrugForm(false)}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Drug Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={drugForm.drug_name}
+                    onChange={(e) => setDrugForm({ ...drugForm, drug_name: e.target.value })}
+                    placeholder="e.g., LA200, Nuflor"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Animal Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={drugForm.animal_type}
+                    onChange={(e) => setDrugForm({ ...drugForm, animal_type: e.target.value as AnimalType })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    {ANIMAL_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Dose Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={drugForm.dose_type}
+                    onChange={(e) => setDrugForm({ ...drugForm, dose_type: e.target.value as any })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="per_pound">Per Pound (ml/lb)</option>
+                    <option value="fixed">Fixed Dose (ml)</option>
+                  </select>
+                </div>
+
+                {drugForm.dose_type === 'per_pound' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      CCs (ml) per Pound <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={drugForm.ccs_per_pound}
+                      onChange={(e) => setDrugForm({ ...drugForm, ccs_per_pound: e.target.value })}
+                      placeholder="e.g., 0.045"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Fixed Dose (ml) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={drugForm.fixed_dose_ml}
+                      onChange={(e) => setDrugForm({ ...drugForm, fixed_dose_ml: e.target.value })}
+                      placeholder="e.g., 10.0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={drugForm.notes}
+                    onChange={(e) => setDrugForm({ ...drugForm, notes: e.target.value })}
+                    placeholder="e.g., Intramuscular, Subcutaneous"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowDrugForm(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveDrug}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+                >
+                  {editingDrug ? 'Update' : 'Add'} Drug
                 </button>
               </div>
             </div>

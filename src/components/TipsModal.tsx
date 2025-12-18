@@ -7,6 +7,84 @@ interface TipsModalProps {
   onClose: () => void;
 }
 
+function parseFormattedText(text: string): JSX.Element[] {
+  const lines = text.split('\n');
+  return lines.map((line, lineIndex) => {
+    const parts: JSX.Element[] = [];
+    let lastIndex = 0;
+
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    const underlineRegex = /__(.*?)__/g;
+
+    const allMatches: Array<{ index: number; length: number; text: string; type: 'bold' | 'underline' }> = [];
+
+    let match;
+    while ((match = boldRegex.exec(line)) !== null) {
+      allMatches.push({
+        index: match.index,
+        length: match[0].length,
+        text: match[1],
+        type: 'bold'
+      });
+    }
+
+    while ((match = underlineRegex.exec(line)) !== null) {
+      allMatches.push({
+        index: match.index,
+        length: match[0].length,
+        text: match[1],
+        type: 'underline'
+      });
+    }
+
+    allMatches.sort((a, b) => a.index - b.index);
+
+    allMatches.forEach((m, i) => {
+      if (m.index > lastIndex) {
+        parts.push(
+          <span key={`text-${lineIndex}-${i}`}>
+            {line.substring(lastIndex, m.index)}
+          </span>
+        );
+      }
+
+      if (m.type === 'bold') {
+        parts.push(
+          <strong key={`bold-${lineIndex}-${i}`} className="font-bold">
+            {m.text}
+          </strong>
+        );
+      } else {
+        parts.push(
+          <span key={`underline-${lineIndex}-${i}`} className="underline">
+            {m.text}
+          </span>
+        );
+      }
+
+      lastIndex = m.index + m.length;
+    });
+
+    if (lastIndex < line.length) {
+      parts.push(
+        <span key={`text-${lineIndex}-end`}>
+          {line.substring(lastIndex)}
+        </span>
+      );
+    }
+
+    if (parts.length === 0) {
+      parts.push(<span key={`empty-${lineIndex}`}>{line}</span>);
+    }
+
+    return (
+      <div key={`line-${lineIndex}`}>
+        {parts}
+      </div>
+    );
+  });
+}
+
 export function TipsModal({ isOpen, onClose }: TipsModalProps) {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -59,9 +137,9 @@ export function TipsModal({ isOpen, onClose }: TipsModalProps) {
             </div>
           ) : (
             <div className="prose max-w-none">
-              <pre className="whitespace-pre-wrap font-sans text-gray-800 text-base leading-relaxed">
-                {content}
-              </pre>
+              <div className="font-sans text-gray-800 text-base leading-relaxed">
+                {parseFormattedText(content)}
+              </div>
             </div>
           )}
         </div>

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Edit2, Save, Trash2, FileText, Camera, Trash, Upload, Image as ImageIcon } from 'lucide-react';
+import { X, Edit2, Save, Trash2, FileText, Camera, Trash, Upload, Image as ImageIcon, Syringe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalHistoryModal } from './MedicalHistoryModal';
+import { InjectionModal } from './InjectionModal';
 import { CameraCapture } from './CameraCapture';
 import { PhotoGallery } from './PhotoGallery';
 import { useToast } from '../contexts/ToastContext';
+import { ANIMAL_TYPES, getSexOptions, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
@@ -26,6 +28,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
+  const [showInjection, setShowInjection] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [photos, setPhotos] = useState<AnimalPhoto[]>([]);
@@ -38,6 +41,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     tag_number: animal.tag_number || '',
     tag_color: animal.tag_color || '',
     name: animal.name || '',
+    animal_type: ((animal as any).animal_type || 'Cattle') as AnimalType,
     sex: animal.sex,
     source: animal.source,
     status: animal.status,
@@ -62,6 +66,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           tag_number: formData.tag_number || null,
           tag_color: formData.tag_color || null,
           name: formData.name || null,
+          animal_type: formData.animal_type,
           sex: formData.sex,
           source: formData.source,
           status: formData.status,
@@ -417,6 +422,13 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   <FileText className="w-5 h-5" />
                 </button>
                 <button
+                  onClick={() => setShowInjection(true)}
+                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                  title="Administer Injection"
+                >
+                  <Syringe className="w-5 h-5" />
+                </button>
+                <button
                   onClick={() => setIsEditing(true)}
                   className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
                   title="Edit"
@@ -457,6 +469,11 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">Name</h3>
                 <p className="text-gray-900">{animal.name || '-'}</p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">Animal Type</h3>
+                <p className="text-gray-900">{(animal as any).animal_type || 'Cattle'}</p>
               </div>
 
               <div>
@@ -578,6 +595,28 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Animal Type</label>
+                  <select
+                    value={formData.animal_type}
+                    onChange={(e) => {
+                      const newType = e.target.value as AnimalType;
+                      const sexOptions = getSexOptions(newType);
+                      setFormData({
+                        ...formData,
+                        animal_type: newType,
+                        sex: sexOptions[0] as any
+                      });
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  >
+                    {ANIMAL_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Sex</label>
                   <select
                     value={formData.sex}
@@ -585,10 +624,9 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     required
                   >
-                    <option value="BULL">Bull</option>
-                    <option value="COW">Cow</option>
-                    <option value="STEER">Steer</option>
-                    <option value="HEIFER">Heifer</option>
+                    {getSexOptions(formData.animal_type).map(sex => (
+                      <option key={sex} value={sex.toUpperCase()}>{sex}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -674,7 +712,12 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   >
                     <option value="">Select mother...</option>
                     {allAnimals
-                      .filter(a => a.sex === 'COW' || a.sex === 'HEIFER')
+                      .filter(a => {
+                        const animalType = (a as any).animal_type || 'Cattle';
+                        if (animalType !== formData.animal_type) return false;
+                        const sex = a.sex.toUpperCase();
+                        return ['COW', 'HEIFER', 'MARE', 'FILLY', 'EWE', 'DOE', 'SOW', 'GILT'].includes(sex);
+                      })
                       .map(a => (
                         <option key={a.id} value={a.id}>
                           {a.tag_number ? `#${a.tag_number}` : ''} {a.name || a.description || 'Unknown'}
@@ -692,7 +735,12 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   >
                     <option value="">Select father...</option>
                     {allAnimals
-                      .filter(a => a.sex === 'BULL' || a.sex === 'STEER')
+                      .filter(a => {
+                        const animalType = (a as any).animal_type || 'Cattle';
+                        if (animalType !== formData.animal_type) return false;
+                        const sex = a.sex.toUpperCase();
+                        return ['BULL', 'STEER', 'STALLION', 'GELDING', 'COLT', 'RAM', 'WETHER', 'BUCK', 'BOAR', 'BARROW'].includes(sex);
+                      })
                       .map(a => (
                         <option key={a.id} value={a.id}>
                           {a.tag_number ? `#${a.tag_number}` : ''} {a.name || a.description || 'Unknown'}
@@ -820,6 +868,15 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             animalName={animal.name || animal.tag_number || 'Unknown'}
             ranchId={animal.ranch_id}
             onClose={() => setShowMedical(false)}
+          />
+        )}
+
+        {showInjection && (
+          <InjectionModal
+            animal={animal}
+            ranchId={animal.ranch_id}
+            onClose={() => setShowInjection(false)}
+            onUpdate={onUpdate}
           />
         )}
 

@@ -14,6 +14,7 @@ import {
   type CountsReport,
 } from '../utils/reportGenerators';
 import { printReport, formatDateForDisplay, calculateAge } from '../utils/printHelpers';
+import { ANIMAL_TYPES, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
@@ -36,6 +37,7 @@ export function ReportsPage() {
   const [currentReport, setCurrentReport] = useState<ReportType>(null);
   const [salesDate, setSalesDate] = useState<string>('');
   const [showProrateSale, setShowProrateSale] = useState(false);
+  const [animalTypeFilter, setAnimalTypeFilter] = useState<'ALL' | AnimalType>('ALL');
 
   useEffect(() => {
     if (currentRanch) {
@@ -100,13 +102,22 @@ export function ReportsPage() {
       setAnimals(fetchedAnimals);
       setMedicalRecords(medicalRes.data || []);
       setSettings(fetchedSettings as RanchSettings);
-      setCounts(generateCountsReport(fetchedAnimals, fetchedSettings as RanchSettings));
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const filteredAnimals = animalTypeFilter === 'ALL'
+    ? animals
+    : animals.filter(a => ((a as any).animal_type || 'Cattle') === animalTypeFilter);
+
+  useEffect(() => {
+    if (settings) {
+      setCounts(generateCountsReport(filteredAnimals, settings));
+    }
+  }, [filteredAnimals, settings]);
 
   const saveCountSnapshot = async () => {
     if (!currentRanch || !counts) return;
@@ -150,13 +161,13 @@ export function ReportsPage() {
   };
 
   const exportInventoryCSV = () => {
-    const present = animals.filter(a => a.status === 'PRESENT');
+    const present = filteredAnimals.filter(a => a.status === 'PRESENT');
     const data = present.map(a => formatAnimalForExport(a, customFields, customFieldValues));
     exportToCSV(data, Object.keys(data[0] || {}), 'AmadorHerdInfo_Inventory.csv');
   };
 
   const exportCalvesCSV = () => {
-    const report = generateCalvesByMotherReport(animals);
+    const report = generateCalvesByMotherReport(filteredAnimals);
     const data = report.map(r => ({
       'Mother Tag': r.motherTag || '',
       'Mother Name': r.motherName || '',
@@ -212,7 +223,7 @@ export function ReportsPage() {
   };
 
   const exportSalesCSV = () => {
-    const sold = animals
+    const sold = filteredAnimals
       .filter(a => a.status === 'SOLD' && a.exit_date)
       .sort((a, b) => new Date(b.exit_date!).getTime() - new Date(a.exit_date!).getTime());
     const data = sold.map(animal => ({
@@ -238,13 +249,13 @@ export function ReportsPage() {
     );
   }
 
-  if (currentReport && animals.length > 0) {
-    const presentAnimals = animals.filter(a => a.status === 'PRESENT');
-    const allSoldAnimals = animals.filter(a => a.status === 'SOLD');
+  if (currentReport && filteredAnimals.length > 0) {
+    const presentAnimals = filteredAnimals.filter(a => a.status === 'PRESENT');
+    const allSoldAnimals = filteredAnimals.filter(a => a.status === 'SOLD');
     const soldAnimals = salesDate
       ? allSoldAnimals.filter(a => a.exit_date === salesDate)
       : allSoldAnimals;
-    const calvesReport = generateCalvesByMotherReport(animals);
+    const calvesReport = generateCalvesByMotherReport(filteredAnimals);
 
     return (
       <Layout currentPage="reports">
@@ -581,12 +592,27 @@ export function ReportsPage() {
   return (
     <Layout currentPage="reports">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-          <p className="text-gray-600 mt-1">View, print, and export herd reports</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
+            <p className="text-gray-600 mt-1">View, print, and export herd reports</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Filter by Animal Type:</label>
+            <select
+              value={animalTypeFilter}
+              onChange={(e) => setAnimalTypeFilter(e.target.value as 'ALL' | AnimalType)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value="ALL">All Types</option>
+              {ANIMAL_TYPES.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {counts && animals.length > 0 && (
+        {counts && filteredAnimals.length > 0 && (
           <>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
@@ -722,6 +748,15 @@ export function ReportsPage() {
             <p className="text-gray-600">No animals to report on yet</p>
             <p className="text-sm text-gray-500 mt-2">
               Add animals to your ranch to see detailed reports
+            </p>
+          </div>
+        )}
+
+        {animals.length > 0 && filteredAnimals.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <p className="text-gray-600">No animals match the selected filter</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Try selecting "All Types" or add animals of type {animalTypeFilter}
             </p>
           </div>
         )}
