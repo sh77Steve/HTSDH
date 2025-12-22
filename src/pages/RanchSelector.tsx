@@ -1,95 +1,8 @@
-import { useState } from 'react';
 import { useRanch } from '../contexts/RanchContext';
-import { Home, Plus } from 'lucide-react';
+import { Home, Mail } from 'lucide-react';
 
 export function RanchSelector() {
-  const { userRanches, selectRanch, createRanch } = useRanch();
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleCreateRanch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      await createRanch(name, location || undefined);
-      setShowCreateForm(false);
-      setName('');
-      setLocation('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create ranch');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (showCreateForm) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Ranch</h2>
-
-          <form onSubmit={handleCreateRanch} className="space-y-5">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Ranch Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-                placeholder="My Ranch"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
-                Location (Optional)
-              </label>
-              <input
-                id="location"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-                placeholder="City, State"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCreateForm(false)}
-                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition"
-              >
-                {loading ? 'Creating...' : 'Create Ranch'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  }
+  const { userRanches, selectRanch } = useRanch();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
@@ -132,13 +45,14 @@ export function RanchSelector() {
           ))}
         </div>
 
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-green-500 hover:text-green-600 transition"
-        >
-          <Plus className="w-5 h-5" />
-          Create New Ranch
-        </button>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 text-center">
+          <Mail className="w-12 h-12 text-blue-600 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Need a Ranch Invitation?</h3>
+          <p className="text-sm text-gray-600">
+            To create a new ranch or join an existing one, you'll need an invitation from a system
+            administrator or ranch owner. Contact your administrator to get an invitation link.
+          </p>
+        </div>
       </div>
     </div>
   );

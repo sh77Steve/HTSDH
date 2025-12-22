@@ -7,6 +7,12 @@ type Animal = Database['public']['Tables']['animals']['Row'];
 type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
 type AnimalPhoto = Database['public']['Tables']['animal_photos']['Row'];
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
+type UserRanch = Database['public']['Tables']['user_ranches']['Row'];
+type Admin = Database['public']['Tables']['admins']['Row'];
+type LicenseKey = Database['public']['Tables']['license_keys']['Row'];
+type Invitation = Database['public']['Tables']['invitations']['Row'];
+type Drug = Database['public']['Tables']['drugs']['Row'];
+type TipTrick = Database['public']['Tables']['tips_tricks']['Row'];
 
 interface AnimalWithMedicalHistory extends Animal {
   medical_history: MedicalHistory[];
@@ -18,10 +24,20 @@ interface RanchBackupData {
   animals: AnimalWithMedicalHistory[];
 }
 
+interface SystemBackupData {
+  user_ranches: UserRanch[];
+  admins: Admin[];
+  license_keys: LicenseKey[];
+  invitations: Invitation[];
+  drugs: Drug[];
+  tips_tricks: TipTrick[];
+}
+
 interface BackupMetadata {
   version: string;
   created_at: string;
   ranch_count: number;
+  includes_system_data: boolean;
 }
 
 export async function createBackup(
@@ -42,12 +58,51 @@ export async function createBackup(
     }
 
     const metadata: BackupMetadata = {
-      version: '1.0',
+      version: '2.0',
       created_at: new Date().toISOString(),
-      ranch_count: ranches.length
+      ranch_count: ranches.length,
+      includes_system_data: true
     };
 
     zip.file('metadata.json', JSON.stringify(metadata, null, 2));
+
+    // Back up system-level data
+    onProgress?.('Backing up system data (users, admins, licenses)...');
+
+    const { data: userRanches } = await supabase
+      .from('user_ranches')
+      .select('*');
+
+    const { data: admins } = await supabase
+      .from('admins')
+      .select('*');
+
+    const { data: licenseKeys } = await supabase
+      .from('license_keys')
+      .select('*');
+
+    const { data: invitations } = await supabase
+      .from('invitations')
+      .select('*');
+
+    const { data: drugs } = await supabase
+      .from('drugs')
+      .select('*');
+
+    const { data: tipsTricks } = await supabase
+      .from('tips_tricks')
+      .select('*');
+
+    const systemData: SystemBackupData = {
+      user_ranches: userRanches || [],
+      admins: admins || [],
+      license_keys: licenseKeys || [],
+      invitations: invitations || [],
+      drugs: drugs || [],
+      tips_tricks: tipsTricks || []
+    };
+
+    zip.file('system-data.json', JSON.stringify(systemData, null, 2));
 
     for (const ranch of ranches) {
       onProgress?.(`Backing up ranch: ${ranch.name}...`);
@@ -181,6 +236,83 @@ export async function restoreFromBackup(
     const metadata: BackupMetadata = JSON.parse(metadataText);
 
     onProgress?.(`Found backup with ${metadata.ranch_count} ranch(es)`);
+
+    // Restore system data if present (v2.0 backups)
+    const systemDataFile = contents.file('system-data.json');
+    if (systemDataFile) {
+      onProgress?.('Restoring system data (users, admins, licenses)...');
+
+      const systemDataText = await systemDataFile.async('text');
+      const systemData: SystemBackupData = JSON.parse(systemDataText);
+
+      // Restore user_ranches
+      if (systemData.user_ranches && systemData.user_ranches.length > 0) {
+        onProgress?.(`Restoring ${systemData.user_ranches.length} user-ranch associations...`);
+        for (const userRanch of systemData.user_ranches) {
+          await supabase
+            .from('user_ranches')
+            .upsert(userRanch, { onConflict: 'user_id,ranch_id' })
+            .select();
+        }
+      }
+
+      // Restore admins
+      if (systemData.admins && systemData.admins.length > 0) {
+        onProgress?.(`Restoring ${systemData.admins.length} admin(s)...`);
+        for (const admin of systemData.admins) {
+          await supabase
+            .from('admins')
+            .upsert(admin, { onConflict: 'user_id' })
+            .select();
+        }
+      }
+
+      // Restore license keys
+      if (systemData.license_keys && systemData.license_keys.length > 0) {
+        onProgress?.(`Restoring ${systemData.license_keys.length} license key(s)...`);
+        for (const licenseKey of systemData.license_keys) {
+          await supabase
+            .from('license_keys')
+            .upsert(licenseKey, { onConflict: 'key' })
+            .select();
+        }
+      }
+
+      // Restore invitations
+      if (systemData.invitations && systemData.invitations.length > 0) {
+        onProgress?.(`Restoring ${systemData.invitations.length} invitation(s)...`);
+        for (const invitation of systemData.invitations) {
+          await supabase
+            .from('invitations')
+            .upsert(invitation, { onConflict: 'id' })
+            .select();
+        }
+      }
+
+      // Restore drugs
+      if (systemData.drugs && systemData.drugs.length > 0) {
+        onProgress?.(`Restoring ${systemData.drugs.length} drug(s)...`);
+        for (const drug of systemData.drugs) {
+          await supabase
+            .from('drugs')
+            .upsert(drug, { onConflict: 'id' })
+            .select();
+        }
+      }
+
+      // Restore tips & tricks
+      if (systemData.tips_tricks && systemData.tips_tricks.length > 0) {
+        onProgress?.(`Restoring ${systemData.tips_tricks.length} tip(s)...`);
+        for (const tip of systemData.tips_tricks) {
+          await supabase
+            .from('tips_tricks')
+            .upsert(tip, { onConflict: 'id' })
+            .select();
+        }
+      }
+
+      onProgress?.('System data restored successfully');
+    }
 
     const ranchFolders = Object.keys(contents.files).filter(
       path => path.includes('/') && path.endsWith('animals.json')

@@ -4,6 +4,7 @@ import { RanchProvider, useRanch } from './contexts/RanchContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LoginPage } from './pages/LoginPage';
 import { SignUpPage } from './pages/SignUpPage';
+import { InvitationRedemptionPage } from './pages/InvitationRedemptionPage';
 import { RanchSelector } from './pages/RanchSelector';
 import { AnimalsPage } from './pages/AnimalsPage';
 import { SearchPage } from './pages/SearchPage';
@@ -38,6 +39,12 @@ function AppContent() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  if (currentRoute === '/redeem-invitation') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    return <InvitationRedemptionPage invitationCode={code || undefined} />;
+  }
 
   if (authLoading || (user && ranchLoading)) {
     return (

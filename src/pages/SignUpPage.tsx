@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserPlus } from 'lucide-react';
 
@@ -10,6 +10,15 @@ export function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [invitationCode, setInvitationCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const invite = urlParams.get('invite');
+    if (invite) {
+      setInvitationCode(invite);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +38,10 @@ export function SignUpPage() {
 
     try {
       await signUp(email, password, name);
+
+      if (invitationCode) {
+        window.location.href = `/redeem-invitation?code=${invitationCode}`;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign up');
     } finally {
@@ -48,12 +61,20 @@ export function SignUpPage() {
         <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">
           Create Account
         </h1>
-        <p className="text-center text-gray-600 mb-6">
+        <p className="text-center text-gray-600 mb-2">
           Get started with AmadorHerdInfo
         </p>
         <p className="text-center text-gray-500 text-xs mb-6">
           by Amador Software
         </p>
+
+        {invitationCode && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+            <p className="text-sm text-blue-900 text-center">
+              You're signing up with an invitation code
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>

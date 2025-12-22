@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { getTodayLocalDate } from '../utils/printHelpers';
 import type { Database } from '../lib/database.types';
 
 type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
@@ -21,7 +22,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayLocalDate(),
     description: '',
   });
 
@@ -64,7 +65,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
 
       setShowAddForm(false);
       setFormData({
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayLocalDate(),
         description: '',
       });
       await fetchRecords();
@@ -94,7 +95,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
 
       setEditingId(null);
       setFormData({
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayLocalDate(),
         description: '',
       });
       await fetchRecords();
@@ -137,7 +138,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
   const cancelEdit = () => {
     setEditingId(null);
     setFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayLocalDate(),
       description: '',
     });
   };
@@ -160,7 +161,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
                 setShowAddForm(!showAddForm);
                 setEditingId(null);
                 setFormData({
-                  date: new Date().toISOString().split('T')[0],
+                  date: getTodayLocalDate(),
                   description: '',
                 });
               }}
@@ -216,7 +217,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
                     onClick={() => {
                       setShowAddForm(false);
                       setFormData({
-                        date: new Date().toISOString().split('T')[0],
+                        date: getTodayLocalDate(),
                         description: '',
                       });
                     }}

@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { generateLicenseKey } from '../utils/licenseKeyGenerator';
 import { MessageList } from '../components/MessageList';
 import { SendMessage } from '../components/SendMessage';
+import { AdminRanchInvitationPanel } from '../components/AdminRanchInvitationPanel';
 import { Key, Plus, CheckCircle, XCircle, ArrowLeft, Users, RefreshCw, Lock, MessageSquare, Send, FileText, Upload, Download, UploadCloud } from 'lucide-react';
 import type { LicenseType } from '../lib/database.types';
 import { downloadBackup, restoreFromBackup } from '../utils/backupRestore';
@@ -93,10 +94,9 @@ export default function LicenseManagementPage() {
     }
 
     const { data, error } = await supabase
-      .from('user_ranches')
-      .select('role')
+      .from('admins')
+      .select('user_id')
       .eq('user_id', user.id)
-      .eq('role', 'ADMIN')
       .maybeSingle();
 
     if (error) {
@@ -853,6 +853,8 @@ export default function LicenseManagementPage() {
           )}
         </div>
       </div>
+
+      <AdminRanchInvitationPanel />
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-6">

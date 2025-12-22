@@ -3,6 +3,7 @@ import { X, Syringe, Calculator } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { getTodayLocalDate } from '../utils/printHelpers';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
@@ -125,7 +126,7 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
       const { error: historyError } = await supabase.from('medical_history').insert({
         animal_id: animal.id,
         ranch_id: ranchId,
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayLocalDate(),
         description,
         created_by_user_id: user?.id || null,
       });
@@ -163,6 +164,53 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
     return new Date(date).toLocaleDateString();
   };
 
+  const getWeightFormula = (animalType: string) => {
+    switch (animalType.toLowerCase()) {
+      case 'cattle':
+        return {
+          divisor: 300,
+          hgLabel: 'Heart Girth (HG)',
+          hgDescription: 'Circumference around the chest behind the front legs',
+          blLabel: 'Body Length (BL)',
+          blDescription: 'Distance from point of shoulder to pin bone',
+          imagePath: '/weightmeasure.jpg',
+        };
+      case 'horse':
+        return {
+          divisor: 330,
+          hgLabel: 'Heart Girth (HG)',
+          hgDescription: 'Around the barrel where the girth/cinch sits (just behind the elbow)',
+          blLabel: 'Body Length (BL)',
+          blDescription: 'Point of shoulder to point of buttock',
+          imagePath: '/horse.jpg',
+        };
+      case 'pig':
+        return {
+          divisor: 400,
+          hgLabel: 'Heart Girth (HG)',
+          hgDescription: 'Circumference just behind the forelegs',
+          blLabel: 'Body Length (BL)',
+          blDescription: 'Between the ears (poll) to base of tail, along the back',
+          imagePath: '/pig.jpg',
+        };
+      case 'sheep':
+      case 'goat':
+        return {
+          divisor: 300,
+          hgLabel: 'Heart Girth (HG)',
+          hgDescription: 'Circumference around the chest behind the front legs (part/compress wool if unshorn)',
+          blLabel: 'Body Length (BL)',
+          blDescription: 'Distance from point of shoulder to pin bone',
+          imagePath: '/sheep_goat.jpg',
+        };
+      default:
+        return null;
+    }
+  };
+
+  const animalType = (animal as any).animal_type || 'Cattle';
+  const weightFormula = getWeightFormula(animalType);
+
   const handleCalculateWeight = () => {
     const hg = parseFloat(heartGirth);
     const bl = parseFloat(bodyLength);
@@ -172,7 +220,9 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
       return;
     }
 
-    const calculatedWeight = (hg * hg * bl) / 300;
+    if (!weightFormula) return;
+
+    const calculatedWeight = (hg * hg * bl) / weightFormula.divisor;
     setEstimatedWeight(Math.round(calculatedWeight).toString());
     setShowWeightCalculator(false);
     setHeartGirth('');
@@ -230,15 +280,17 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
                     <label className="block text-sm font-medium text-gray-700">
                       Estimated Animal Weight (lbs) <span className="text-red-500">*</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowWeightCalculator(true)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition"
-                      title="Help Estimate Weight"
-                    >
-                      <Calculator className="w-4 h-4" />
-                      Help Estimate Weight
-                    </button>
+                    {weightFormula && (
+                      <button
+                        type="button"
+                        onClick={() => setShowWeightCalculator(true)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition"
+                        title="Help Estimate Weight"
+                      >
+                        <Calculator className="w-4 h-4" />
+                        Help Estimate Weight
+                      </button>
+                    )}
                   </div>
                   <input
                     type="number"
@@ -346,11 +398,11 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
         </div>
       </div>
 
-      {showWeightCalculator && (
+      {showWeightCalculator && weightFormula && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
-              <h3 className="text-xl font-semibold text-gray-900">Estimate Weight</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Estimate Weight - {animalType}</h3>
               <button
                 onClick={() => {
                   setShowWeightCalculator(false);
@@ -364,25 +416,30 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
             </div>
 
             <div className="space-y-4 overflow-y-auto px-6 pb-6 flex-1">
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-sm text-amber-900">
+                <p className="font-medium">⚠️ Disclaimer:</p>
+                <p className="mt-1">This method of weight estimating is not always accurate. Please double check based on your ranching experience.</p>
+              </div>
+
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
                 <p className="font-medium mb-2">How to Measure:</p>
                 <ul className="space-y-1 list-disc list-inside">
-                  <li><strong>Heart Girth (HG):</strong> Circumference around the chest behind the front legs</li>
-                  <li><strong>Body Length (BL):</strong> Distance from point of shoulder to pin bone</li>
+                  <li><strong>{weightFormula.hgLabel}:</strong> {weightFormula.hgDescription}</li>
+                  <li><strong>{weightFormula.blLabel}:</strong> {weightFormula.blDescription}</li>
                 </ul>
               </div>
 
               <div className="bg-white border border-gray-200 rounded-lg p-2">
                 <img
-                  src="/weightmeasure.jpg"
-                  alt="Cattle measurement diagram showing Heart Girth and Body Length"
+                  src={weightFormula.imagePath}
+                  alt="Measurement diagram showing Heart Girth and Body Length"
                   className="w-full h-auto rounded"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Heart Girth (inches) <span className="text-red-500">*</span>
+                  {weightFormula.hgLabel} (inches) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -397,7 +454,7 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Body Length (inches) <span className="text-red-500">*</span>
+                  {weightFormula.blLabel} (inches) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -412,9 +469,9 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
 
               {heartGirth && bodyLength && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm text-gray-700 mb-1">Formula: (HG × HG × BL) / 300</p>
+                  <p className="text-sm text-gray-700 mb-1">Formula: (HG × HG × BL) / {weightFormula.divisor}</p>
                   <p className="text-lg font-bold text-green-900">
-                    Estimated Weight: {Math.round((parseFloat(heartGirth) ** 2 * parseFloat(bodyLength)) / 300)} lbs
+                    Estimated Weight: {Math.round((parseFloat(heartGirth) ** 2 * parseFloat(bodyLength)) / weightFormula.divisor)} lbs
                   </p>
                 </div>
               )}

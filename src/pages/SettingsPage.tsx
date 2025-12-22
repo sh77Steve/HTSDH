@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase';
 import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb, Syringe } from 'lucide-react';
 import { ImportModal } from '../components/ImportModal';
 import { TipsModal } from '../components/TipsModal';
+import { AdminRanchInvitationPanel } from '../components/AdminRanchInvitationPanel';
+import { RanchMemberInvitationPanel } from '../components/RanchMemberInvitationPanel';
 import { ANIMAL_TYPES, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
 
@@ -67,8 +69,45 @@ export function SettingsPage() {
   }, [currentRanch]);
 
   useEffect(() => {
-    setIsAdmin(currentUserRole === 'ADMIN');
-  }, [currentUserRole]);
+    checkAdminStatus();
+  }, [user]);
+
+  const checkAdminStatus = async () => {
+    console.log('=== CHECKING ADMIN STATUS ===');
+    console.log('User object:', user);
+
+    if (!user) {
+      console.log('No user found, setting isAdmin to false');
+      setIsAdmin(false);
+      return;
+    }
+
+    console.log('User ID:', user.id);
+
+    try {
+      const { data, error } = await supabase
+        .from('admins')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      console.log('Supabase query result:', { data, error });
+
+      if (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+        return;
+      }
+
+      const adminStatus = !!data;
+      console.log('Setting isAdmin to:', adminStatus);
+      setIsAdmin(adminStatus);
+      console.log('isAdmin state should now be:', adminStatus);
+    } catch (error) {
+      console.error('Exception checking admin status:', error);
+      setIsAdmin(false);
+    }
+  };
 
   const fetchSettings = async () => {
     if (!currentRanch) return;
@@ -455,6 +494,10 @@ export function SettingsPage() {
     );
   }
 
+  console.log('=== RENDERING SettingsPage ===');
+  console.log('isAdmin value during render:', isAdmin);
+  console.log('user value during render:', user);
+
   return (
     <Layout currentPage="settings">
       <div className="space-y-6">
@@ -462,6 +505,11 @@ export function SettingsPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Ranch Settings</h1>
             <p className="text-gray-600 mt-1">Configure your ranch preferences</p>
+            {user && (
+              <p className="text-xs text-gray-500 mt-2">
+                User ID: {user.id} | Admin Status: {isAdmin ? 'YES' : 'NO'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1122,31 +1170,39 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 space-y-6">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Shield className="w-6 h-6 text-blue-600" />
-                <h2 className="text-xl font-semibold text-blue-900">Admin Controls</h2>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Administrative tools for system management
-              </p>
+        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+          <RanchMemberInvitationPanel />
+        )}
 
-              <a
-                href="/license-management"
-                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left w-full max-w-md"
-              >
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Key className="w-6 h-6 text-blue-600" />
+        {isAdmin && (
+          <>
+            <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 space-y-6">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Shield className="w-6 h-6 text-blue-600" />
+                  <h2 className="text-xl font-semibold text-blue-900">Admin Controls</h2>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">License Management</h3>
-                  <p className="text-sm text-gray-600">Generate and manage license keys</p>
-                </div>
-              </a>
+                <p className="text-sm text-gray-600 mb-4">
+                  Administrative tools for system management
+                </p>
+
+                <a
+                  href="/license-management"
+                  className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left w-full max-w-md"
+                >
+                  <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Key className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">License Management</h3>
+                    <p className="text-sm text-gray-600">Generate and manage license keys</p>
+                  </div>
+                </a>
+              </div>
             </div>
-          </div>
+
+            <AdminRanchInvitationPanel />
+          </>
         )}
 
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-6">
