@@ -1,6 +1,6 @@
-export type AnimalType = 'Cattle' | 'Horse' | 'Sheep' | 'Goat' | 'Pig' | 'Donkey';
+export type AnimalType = 'Cattle' | 'Horse' | 'Sheep' | 'Goat' | 'Pig' | 'Donkey' | 'Other';
 
-export const ANIMAL_TYPES: AnimalType[] = ['Cattle', 'Horse', 'Sheep', 'Goat', 'Pig', 'Donkey'];
+export const ANIMAL_TYPES: AnimalType[] = ['Cattle', 'Horse', 'Sheep', 'Goat', 'Pig', 'Donkey', 'Other'];
 
 export const ANIMAL_SEX_OPTIONS: Record<AnimalType, string[]> = {
   Cattle: ['Bull', 'Steer', 'Cow', 'Heifer'],
@@ -9,6 +9,7 @@ export const ANIMAL_SEX_OPTIONS: Record<AnimalType, string[]> = {
   Goat: ['Buck', 'Wether', 'Doe', 'Kid'],
   Pig: ['Boar', 'Barrow', 'Sow', 'Gilt', 'Piglet'],
   Donkey: ['Stallion', 'Gelding', 'Mare', 'Filly', 'Colt'],
+  Other: ['N/A'],
 };
 
 export interface AutoPromotionRule {
@@ -32,6 +33,7 @@ export const AUTO_PROMOTION_RULES: Record<AnimalType, AutoPromotionRule[]> = {
   Sheep: [],
   Goat: [],
   Pig: [],
+  Other: [],
 };
 
 export function getSexOptions(animalType: AnimalType): string[] {

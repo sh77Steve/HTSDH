@@ -7,7 +7,8 @@ import { supabase } from '../lib/supabase';
 import { Printer, FileDown, Calendar, BarChart3, DollarSign } from 'lucide-react';
 import {
   generateCountsReport,
-  generateCalvesByMotherReport,
+  generateOffspringByMotherReport,
+  generateOffspringByFatherReport,
   exportToCSV,
   formatAnimalForExport,
   formatAnimalWithMedicalForExport,
@@ -23,7 +24,7 @@ type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
 type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
 type CustomFieldValue = Database['public']['Tables']['custom_field_values']['Row'];
 
-type ReportType = 'counts' | 'inventory' | 'calves' | 'sales' | null;
+type ReportType = 'counts' | 'inventory' | 'offspring-mother' | 'offspring-father' | 'sales' | null;
 
 export function ReportsPage() {
   const { currentRanch } = useRanch();
@@ -166,15 +167,30 @@ export function ReportsPage() {
     exportToCSV(data, Object.keys(data[0] || {}), 'AmadorHerdInfo_Inventory.csv');
   };
 
-  const exportCalvesCSV = () => {
-    const report = generateCalvesByMotherReport(filteredAnimals);
+  const exportOffspringByMotherCSV = () => {
+    const report = generateOffspringByMotherReport(filteredAnimals);
     const data = report.map(r => ({
-      'Mother Tag': r.motherTag || '',
-      'Mother Name': r.motherName || '',
-      'Number of Calves': r.calves.length,
-      'Calf Tags': r.calves.map(c => c.tag_number || 'No tag').join(', '),
+      'Mother Tag': r.parentTag || '',
+      'Mother Name': r.parentName || '',
+      'Offspring Count': r.offspring.length,
+      'Last Offspring Date': r.mostRecentBirthDate || 'Never',
+      'Days Since Last': r.daysSinceLastOffspring !== null ? r.daysSinceLastOffspring : 'N/A',
+      'Offspring Tags': r.offspring.map(c => c.tag_number || 'No tag').join(', '),
     }));
-    exportToCSV(data, ['Mother Tag', 'Mother Name', 'Number of Calves', 'Calf Tags'], 'AmadorHerdInfo_Calves.csv');
+    exportToCSV(data, ['Mother Tag', 'Mother Name', 'Offspring Count', 'Last Offspring Date', 'Days Since Last', 'Offspring Tags'], 'AmadorHerdInfo_Offspring_By_Mother.csv');
+  };
+
+  const exportOffspringByFatherCSV = () => {
+    const report = generateOffspringByFatherReport(filteredAnimals);
+    const data = report.map(r => ({
+      'Father Tag': r.parentTag || '',
+      'Father Name': r.parentName || '',
+      'Offspring Count': r.offspring.length,
+      'Last Offspring Date': r.mostRecentBirthDate || 'Never',
+      'Days Since Last': r.daysSinceLastOffspring !== null ? r.daysSinceLastOffspring : 'N/A',
+      'Offspring Tags': r.offspring.map(c => c.tag_number || 'No tag').join(', '),
+    }));
+    exportToCSV(data, ['Father Tag', 'Father Name', 'Offspring Count', 'Last Offspring Date', 'Days Since Last', 'Offspring Tags'], 'AmadorHerdInfo_Offspring_By_Father.csv');
   };
 
   const getCustomFieldValue = (animalId: string, fieldId: string): string | null => {
@@ -255,7 +271,8 @@ export function ReportsPage() {
     const soldAnimals = salesDate
       ? allSoldAnimals.filter(a => a.exit_date === salesDate)
       : allSoldAnimals;
-    const calvesReport = generateCalvesByMotherReport(filteredAnimals);
+    const offspringByMotherReport = generateOffspringByMotherReport(filteredAnimals);
+    const offspringByFatherReport = generateOffspringByFatherReport(filteredAnimals);
 
     return (
       <Layout currentPage="reports">
@@ -292,7 +309,8 @@ export function ReportsPage() {
                 onClick={() => {
                   if (currentReport === 'counts') exportCountsCSV();
                   if (currentReport === 'inventory') exportInventoryCSV();
-                  if (currentReport === 'calves') exportCalvesCSV();
+                  if (currentReport === 'offspring-mother') exportOffspringByMotherCSV();
+                  if (currentReport === 'offspring-father') exportOffspringByFatherCSV();
                   if (currentReport === 'sales') exportSalesCSV();
                 }}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
@@ -336,7 +354,8 @@ export function ReportsPage() {
               title={
                 currentReport === 'counts' ? 'Herd Count Report' :
                 currentReport === 'inventory' ? 'Current Inventory Report' :
-                currentReport === 'calves' ? 'Calves by Mother Report' :
+                currentReport === 'offspring-mother' ? 'Offspring by Mother Report' :
+                currentReport === 'offspring-father' ? 'Offspring by Father Report' :
                 currentReport === 'sales' ? 'Sales History Report' :
                 'Report'
               }
@@ -449,15 +468,33 @@ export function ReportsPage() {
                 </>
               )}
 
-              {currentReport === 'calves' && (
+              {currentReport === 'offspring-mother' && (
                 <ReportSection>
                   <ReportTable
-                    headers={['Mother Tag', 'Mother Name', 'Calves', 'Calf Tags']}
-                    rows={calvesReport.map(r => [
-                      r.motherTag || '-',
-                      r.motherName || '-',
-                      r.calves.length,
-                      r.calves.map(c => c.tag_number || 'No tag').join(', ') || '-',
+                    headers={['Mother Tag', 'Mother Name', 'Offspring Count', 'Last Offspring Date', 'Days Since Last', 'Offspring Tags']}
+                    rows={offspringByMotherReport.map(r => [
+                      r.parentTag || '-',
+                      r.parentName || '-',
+                      r.offspring.length,
+                      r.mostRecentBirthDate ? formatDateForDisplay(r.mostRecentBirthDate) : 'Never',
+                      r.daysSinceLastOffspring !== null ? r.daysSinceLastOffspring : 'N/A',
+                      r.offspring.map(c => c.tag_number || 'No tag').join(', ') || '-',
+                    ])}
+                  />
+                </ReportSection>
+              )}
+
+              {currentReport === 'offspring-father' && (
+                <ReportSection>
+                  <ReportTable
+                    headers={['Father Tag', 'Father Name', 'Offspring Count', 'Last Offspring Date', 'Days Since Last', 'Offspring Tags']}
+                    rows={offspringByFatherReport.map(r => [
+                      r.parentTag || '-',
+                      r.parentName || '-',
+                      r.offspring.length,
+                      r.mostRecentBirthDate ? formatDateForDisplay(r.mostRecentBirthDate) : 'Never',
+                      r.daysSinceLastOffspring !== null ? r.daysSinceLastOffspring : 'N/A',
+                      r.offspring.map(c => c.tag_number || 'No tag').join(', ') || '-',
                     ])}
                   />
                 </ReportSection>
@@ -706,16 +743,33 @@ export function ReportsPage() {
                 </button>
 
                 <button
-                  onClick={() => setCurrentReport('calves')}
+                  onClick={() => setCurrentReport('offspring-mother')}
                   className="text-left border border-gray-200 rounded-lg p-6 hover:border-green-500 hover:bg-green-50 transition group"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 text-lg group-hover:text-green-700">
-                        Calves by Mother
+                        Offspring by Mother
                       </h3>
                       <p className="text-sm text-gray-600 mt-2">
-                        Shows which cows produced calves and offspring details
+                        Shows all potential mothers sorted by productivity, including those with no offspring
+                      </p>
+                    </div>
+                    <BarChart3 className="w-6 h-6 text-gray-400 group-hover:text-green-600" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setCurrentReport('offspring-father')}
+                  className="text-left border border-gray-200 rounded-lg p-6 hover:border-green-500 hover:bg-green-50 transition group"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-lg group-hover:text-green-700">
+                        Offspring by Father
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-2">
+                        Shows all potential fathers sorted by productivity, including those with no offspring
                       </p>
                     </div>
                     <BarChart3 className="w-6 h-6 text-gray-400 group-hover:text-green-600" />

@@ -77,8 +77,10 @@ function parseFormattedText(text: string): JSX.Element[] {
       parts.push(<span key={`empty-${lineIndex}`}>{line}</span>);
     }
 
+    const isEmpty = line.trim().length === 0;
+
     return (
-      <div key={`line-${lineIndex}`}>
+      <div key={`line-${lineIndex}`} className={isEmpty ? 'h-4' : ''}>
         {parts}
       </div>
     );

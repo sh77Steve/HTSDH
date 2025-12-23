@@ -3,13 +3,16 @@ import { Layout } from '../components/Layout';
 import { useRanch } from '../contexts/RanchContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb, Syringe } from 'lucide-react';
+import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb, Syringe, Download } from 'lucide-react';
 import { ImportModal } from '../components/ImportModal';
 import { TipsModal } from '../components/TipsModal';
 import { AdminRanchInvitationPanel } from '../components/AdminRanchInvitationPanel';
 import { RanchMemberInvitationPanel } from '../components/RanchMemberInvitationPanel';
 import { ANIMAL_TYPES, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
+import { createComprehensiveBackup, downloadComprehensiveBackup } from '../utils/comprehensiveBackup';
+import { restoreComprehensiveBackup } from '../utils/comprehensiveRestore';
+import { useToast } from '../contexts/ToastContext';
 
 type RanchSettings = Database['public']['Tables']['ranch_settings']['Row'];
 type CustomFieldDefinition = Database['public']['Tables']['custom_field_definitions']['Row'];
@@ -25,6 +28,7 @@ interface Drug {
 export function SettingsPage() {
   const { currentRanch, currentUserRole, refreshRanchData } = useRanch();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [settings, setSettings] = useState<RanchSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,7 +37,19 @@ export function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDataImport, setShowDataImport] = useState(false);
   const [showTipsModal, setShowTipsModal] = useState(false);
+  const [showInjectionDisclaimer, setShowInjectionDisclaimer] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [exportingBackup, setExportingBackup] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const [restoreSummary, setRestoreSummary] = useState<{
+    animalsAdded: number;
+    animalsSkipped: number;
+    medicalHistoryAdded: number;
+    medicalHistorySkipped: number;
+    customFieldsAdded: number;
+    errors: string[];
+  } | null>(null);
+  const [showRestoreSummary, setShowRestoreSummary] = useState(false);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
   const [showFieldForm, setShowFieldForm] = useState(false);
   const [editingField, setEditingField] = useState<CustomFieldDefinition | null>(null);
@@ -154,7 +170,6 @@ export function SettingsPage() {
         .update({
           report_line1: settings.report_line1,
           report_line2: settings.report_line2,
-          adult_age_years: settings.adult_age_years,
           default_animal_type: (settings as any).default_animal_type,
           cattle_adult_age: (settings as any).cattle_adult_age,
           horse_adult_age: (settings as any).horse_adult_age,
@@ -202,6 +217,39 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save ranch name' });
     } finally {
       setSavingRanchName(false);
+    }
+  };
+
+  const handleToggleInjectionFeature = (enabled: boolean) => {
+    if (enabled && !(settings as any).enable_injection_feature) {
+      setShowInjectionDisclaimer(true);
+    } else {
+      handleSaveInjectionFeature(enabled);
+    }
+  };
+
+  const handleSaveInjectionFeature = async (enabled: boolean) => {
+    if (!settings || !currentRanch) return;
+
+    setMessage(null);
+
+    try {
+      const { error } = await supabase
+        .from('ranch_settings')
+        .update({ enable_injection_feature: enabled })
+        .eq('ranch_id', currentRanch.id);
+
+      if (error) throw error;
+
+      setSettings({ ...settings, enable_injection_feature: enabled } as any);
+      setMessage({
+        type: 'success',
+        text: enabled ? 'Injection feature enabled' : 'Injection feature disabled'
+      });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error updating injection feature:', error);
+      setMessage({ type: 'error', text: 'Failed to update injection feature' });
     }
   };
 
@@ -435,6 +483,89 @@ export function SettingsPage() {
     }
   };
 
+  const handleExportComprehensiveBackup = async () => {
+    if (!currentRanch) return;
+
+    setExportingBackup(true);
+    try {
+      const { data: animals, error: animalsError } = await supabase
+        .from('animals')
+        .select('*')
+        .eq('ranch_id', currentRanch.id);
+
+      if (animalsError) throw animalsError;
+
+      const { data: injections, error: injectionsError } = await supabase
+        .from('medical_history')
+        .select('*')
+        .eq('ranch_id', currentRanch.id);
+
+      if (injectionsError) throw injectionsError;
+
+      const { data: customFieldDefs, error: customFieldsError } = await supabase
+        .from('custom_field_definitions')
+        .select('*')
+        .eq('ranch_id', currentRanch.id)
+        .order('display_order', { ascending: true });
+
+      if (customFieldsError) throw customFieldsError;
+
+      const { data: customFieldVals, error: customFieldValsError } = await supabase
+        .from('custom_field_values')
+        .select('*')
+        .in('animal_id', animals?.map(a => a.id) || []);
+
+      if (customFieldValsError) throw customFieldValsError;
+
+      const backupBlob = await createComprehensiveBackup(
+        {
+          animals: animals || [],
+          injections: injections || [],
+          customFields: customFieldDefs || [],
+          customFieldValues: customFieldVals || [],
+        },
+        currentRanch.id
+      );
+
+      downloadComprehensiveBackup(backupBlob);
+
+      showToast('Backup exported successfully with all photos', 'success');
+    } catch (error: any) {
+      console.error('Error creating comprehensive backup:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to create backup' });
+    } finally {
+      setExportingBackup(false);
+    }
+  };
+
+  const handleRestoreBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !currentRanch) return;
+
+    setRestoringBackup(true);
+    setRestoreSummary(null);
+
+    try {
+      const summary = await restoreComprehensiveBackup(file, currentRanch.id);
+      setRestoreSummary(summary);
+      setShowRestoreSummary(true);
+
+      if (summary.errors.length === 0) {
+        showToast('Backup restored successfully', 'success');
+      } else if (summary.animalsAdded > 0) {
+        showToast('Backup restored with some errors', 'success');
+      } else {
+        showToast('Backup restore completed with errors', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error restoring backup:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to restore backup' });
+    } finally {
+      setRestoringBackup(false);
+      event.target.value = '';
+    }
+  };
+
   const handleDeleteAllData = async () => {
     if (deletePassword !== '!delete!') {
       setMessage({ type: 'error', text: 'Incorrect password. Type "!delete!" to confirm.' });
@@ -622,26 +753,7 @@ export function SettingsPage() {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Adult Age Threshold (years) - Legacy Setting
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={settings.adult_age_years || ''}
-                  onChange={(e) =>
-                    setSettings({ ...settings, adult_age_years: e.target.value })
-                  }
-                  className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Legacy setting - use animal-specific thresholds below
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Cattle Adult Age (years)
@@ -761,6 +873,36 @@ export function SettingsPage() {
               <Save className="w-5 h-5 mr-2" />
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Syringe className="w-6 h-6 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Injection Feature</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Enable the injection/medication dosage calculator feature
+            </p>
+
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <h3 className="font-medium text-gray-900">Enable Injection Feature</h3>
+                <p className="text-sm text-gray-600">
+                  Allow injection dosage calculations for animals
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={(settings as any).enable_injection_feature || false}
+                  onChange={(e) => handleToggleInjectionFeature(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -1150,6 +1292,65 @@ export function SettingsPage() {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
           <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Data Backup & Export</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Create a complete backup of all your animal data, medical records, and photos
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleExportComprehensiveBackup}
+                disabled={exportingBackup}
+                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left w-full max-w-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Download className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {exportingBackup ? 'Creating Backup...' : 'Export Complete Backup'}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Download a ZIP file with CSV data and all animal photos
+                  </p>
+                </div>
+              </button>
+
+              <label className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left w-full max-w-md cursor-pointer">
+                <input
+                  type="file"
+                  accept=".zip"
+                  onChange={handleRestoreBackup}
+                  disabled={restoringBackup}
+                  className="hidden"
+                />
+                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Upload className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {restoringBackup ? 'Restoring Backup...' : 'Restore Complete Backup'}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Merge data from a previous backup (non-destructive)
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-900 font-medium mb-2">
+                Your Data, Your Freedom
+              </p>
+              <p className="text-sm text-green-800">
+                This backup is designed to be portable and human-readable. The CSV file can be opened in any spreadsheet application, and photos are named with animal IDs and tag numbers for easy identification. You're never locked in.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Help & Resources</h2>
             <p className="text-sm text-gray-600 mb-4">
               Learn tips and tricks to get the most out of your ranch management system
@@ -1285,6 +1486,124 @@ export function SettingsPage() {
         isOpen={showTipsModal}
         onClose={() => setShowTipsModal(false)}
       />
+
+      {showRestoreSummary && restoreSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">Restore Summary</h3>
+              <button
+                onClick={() => setShowRestoreSummary(false)}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Animals Added</p>
+                  <p className="text-2xl font-bold text-green-700">{restoreSummary.animalsAdded}</p>
+                </div>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Animals Skipped</p>
+                  <p className="text-2xl font-bold text-blue-700">{restoreSummary.animalsSkipped}</p>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Medical Records Added</p>
+                  <p className="text-2xl font-bold text-green-700">{restoreSummary.medicalHistoryAdded}</p>
+                </div>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Medical Records Skipped</p>
+                  <p className="text-2xl font-bold text-blue-700">{restoreSummary.medicalHistorySkipped}</p>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg col-span-2">
+                  <p className="text-sm text-gray-600">Custom Fields Added</p>
+                  <p className="text-2xl font-bold text-green-700">{restoreSummary.customFieldsAdded}</p>
+                </div>
+              </div>
+
+              {restoreSummary.errors.length > 0 && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm font-semibold text-red-900 mb-2">Errors:</p>
+                  <ul className="space-y-1 text-sm text-red-800 max-h-40 overflow-y-auto">
+                    {restoreSummary.errors.map((error, index) => (
+                      <li key={index}>• {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900">
+                  {restoreSummary.animalsSkipped > 0
+                    ? 'Existing animals were not modified. Only new animals and medical records were added.'
+                    : 'All animals from the backup have been added to your ranch.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowRestoreSummary(false)}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInjectionDisclaimer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-red-900">Injection Feature Disclaimer</h3>
+              <button
+                onClick={() => setShowInjectionDisclaimer(false)}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+              <p className="text-sm text-gray-900 leading-relaxed">
+                It is your responsibility to properly maintain your drug table with accurate dosages.
+                This feature is an estimator not a veterinarian. It is designed for use in a particular
+                common scenario where injections are administered by ranch personnel for vaccinations or
+                sickness. This feature will help you with the math and save you from reading small labels
+                for dosages over-and-over, but we assume that you have the expertise to know if the App
+                suggests an unreasonable dosage. If you are not already a reasonably qualified animal
+                medical technician, do not use this feature. This feature can also help you estimate the
+                animal's weight, but this is only an estimate. If the particular drug is highly dosage
+                sensitive, use a scale rather than this weight estimate. If you cannot do a reasonable
+                job verifying the weight estimate based on experience, do not use this feature.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowInjectionDisclaimer(false)}
+                className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleSaveInjectionFeature(true);
+                  setShowInjectionDisclaimer(false);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition"
+              >
+                Enable Injection Feature
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

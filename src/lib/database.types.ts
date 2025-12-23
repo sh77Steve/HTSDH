@@ -422,3 +422,9 @@ export interface Database {
     };
   };
 }
+
+export type Animal = Database['public']['Tables']['animals']['Row'];
+export type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
+export type Injection = MedicalHistory;
+export type CustomField = Database['public']['Tables']['custom_field_definitions']['Row'];
+export type CustomFieldValue = Database['public']['Tables']['custom_field_values']['Row'];

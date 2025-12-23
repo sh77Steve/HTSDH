@@ -6,6 +6,7 @@ import { InjectionModal } from './InjectionModal';
 import { CameraCapture } from './CameraCapture';
 import { PhotoGallery } from './PhotoGallery';
 import { useToast } from '../contexts/ToastContext';
+import { useRanch } from '../contexts/RanchContext';
 import { ANIMAL_TYPES, getSexOptions, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
 
@@ -24,6 +25,7 @@ interface AnimalDetailModalProps {
 
 export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals }: AnimalDetailModalProps) {
   const { showToast } = useToast();
+  const { currentRanch } = useRanch();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,6 +38,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   const [uploading, setUploading] = useState(false);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [injectionFeatureEnabled, setInjectionFeatureEnabled] = useState(false);
 
   const [formData, setFormData] = useState({
     tag_number: animal.tag_number || '',
@@ -174,7 +177,26 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   useEffect(() => {
     loadPhotos();
     loadCustomFields();
+    loadInjectionFeatureSetting();
   }, [animal.id]);
+
+  const loadInjectionFeatureSetting = async () => {
+    if (!currentRanch) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('ranch_settings')
+        .select('enable_injection_feature')
+        .eq('ranch_id', currentRanch.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setInjectionFeatureEnabled((data as any)?.enable_injection_feature || false);
+    } catch (error) {
+      console.error('Error loading injection feature setting:', error);
+      setInjectionFeatureEnabled(false);
+    }
+  };
 
   const loadCustomFields = async () => {
     try {
@@ -422,7 +444,13 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   <FileText className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => setShowInjection(true)}
+                  onClick={() => {
+                    if (!injectionFeatureEnabled) {
+                      alert('The injection feature is disabled. Go to Settings to enable this feature.');
+                      return;
+                    }
+                    setShowInjection(true);
+                  }}
                   className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
                   title="Administer Injection"
                 >

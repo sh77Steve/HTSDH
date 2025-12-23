@@ -18,11 +18,13 @@ export interface CountsReport {
   presentAdults: number;
 }
 
-export interface CalvesByMotherReport {
-  motherId: string;
-  motherTag: string | null;
-  motherName: string | null;
-  calves: Animal[];
+export interface OffspringByParentReport {
+  parentId: string;
+  parentTag: string | null;
+  parentName: string | null;
+  offspring: Animal[];
+  mostRecentBirthDate: string | null;
+  daysSinceLastOffspring: number | null;
 }
 
 export function generateCountsReport(
@@ -56,16 +58,77 @@ export function generateCountsReport(
   };
 }
 
-export function generateCalvesByMotherReport(animals: Animal[]): CalvesByMotherReport[] {
-  const mothers = animals.filter(a => a.sex === 'COW' || a.sex === 'HEIFER');
+export function generateOffspringByMotherReport(animals: Animal[]): OffspringByParentReport[] {
+  const potentialMothers = animals.filter(a =>
+    a.status === 'PRESENT' && (a.sex === 'COW' || a.sex === 'HEIFER' || a.sex === 'EWE' || a.sex === 'DOE' || a.sex === 'SOW' || a.sex === 'MARE' || a.sex === 'JENNET')
+  );
 
-  return mothers.map(mother => ({
-    motherId: mother.id,
-    motherTag: mother.tag_number,
-    motherName: mother.name,
-    calves: animals.filter(a => a.mother_id === mother.id),
-  })).filter(report => report.calves.length > 0);
+  const reports = potentialMothers.map(mother => {
+    const offspring = animals.filter(a => a.mother_id === mother.id);
+    const birthDates = offspring
+      .map(o => o.birth_date)
+      .filter(d => d != null)
+      .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime());
+
+    const mostRecentBirthDate = birthDates.length > 0 ? birthDates[0] : null;
+    const daysSinceLastOffspring = mostRecentBirthDate
+      ? Math.floor((Date.now() - new Date(mostRecentBirthDate).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    return {
+      parentId: mother.id,
+      parentTag: mother.tag_number,
+      parentName: mother.name,
+      offspring,
+      mostRecentBirthDate,
+      daysSinceLastOffspring,
+    };
+  });
+
+  return reports.sort((a, b) => {
+    if (a.daysSinceLastOffspring === null && b.daysSinceLastOffspring === null) return 0;
+    if (a.daysSinceLastOffspring === null) return -1;
+    if (b.daysSinceLastOffspring === null) return 1;
+    return b.daysSinceLastOffspring - a.daysSinceLastOffspring;
+  });
 }
+
+export function generateOffspringByFatherReport(animals: Animal[]): OffspringByParentReport[] {
+  const potentialFathers = animals.filter(a =>
+    a.status === 'PRESENT' && (a.sex === 'BULL' || a.sex === 'STEER' || a.sex === 'RAM' || a.sex === 'BUCK' || a.sex === 'BOAR' || a.sex === 'STALLION' || a.sex === 'JACK')
+  );
+
+  const reports = potentialFathers.map(father => {
+    const offspring = animals.filter(a => a.father_id === father.id);
+    const birthDates = offspring
+      .map(o => o.birth_date)
+      .filter(d => d != null)
+      .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime());
+
+    const mostRecentBirthDate = birthDates.length > 0 ? birthDates[0] : null;
+    const daysSinceLastOffspring = mostRecentBirthDate
+      ? Math.floor((Date.now() - new Date(mostRecentBirthDate).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    return {
+      parentId: father.id,
+      parentTag: father.tag_number,
+      parentName: father.name,
+      offspring,
+      mostRecentBirthDate,
+      daysSinceLastOffspring,
+    };
+  });
+
+  return reports.sort((a, b) => {
+    if (a.daysSinceLastOffspring === null && b.daysSinceLastOffspring === null) return 0;
+    if (a.daysSinceLastOffspring === null) return -1;
+    if (b.daysSinceLastOffspring === null) return 1;
+    return b.daysSinceLastOffspring - a.daysSinceLastOffspring;
+  });
+}
+
+export const generateCalvesByMotherReport = generateOffspringByMotherReport;
 
 export function exportToCSV(data: any[], headers: string[], filename: string) {
   const csvContent = [
