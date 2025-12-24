@@ -61,6 +61,7 @@ export default function LicenseManagementPage() {
   const [restoreMode, setRestoreMode] = useState<'missing' | 'replace'>('missing');
   const [restoring, setRestoring] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState('');
+  const [invitationRefreshTrigger, setInvitationRefreshTrigger] = useState(0);
 
   const [keyFormData, setKeyFormData] = useState({
     expirationDate: '',
@@ -106,6 +107,14 @@ export default function LicenseManagementPage() {
       setIsAdmin(!!data);
     }
     setLoading(false);
+  }
+
+  function formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${month}/${day}/${year}`;
   }
 
   async function loadLicenseKeys() {
@@ -184,6 +193,7 @@ export default function LicenseManagementPage() {
       setShowKeyForm(false);
       setKeyFormData({ expirationDate: '', maxAnimals: 50 });
       loadLicenseKeys();
+      setInvitationRefreshTrigger(prev => prev + 1);
     }
   }
 
@@ -840,10 +850,10 @@ export default function LicenseManagementPage() {
                         Max Animals: <span className="font-medium">{license.max_animals}</span>
                       </span>
                       <span>
-                        Expires: <span className="font-medium">{license.expiration_date}</span>
+                        Expires: <span className="font-medium">{formatDate(license.expiration_date)}</span>
                       </span>
                       <span>
-                        Created: <span className="font-medium">{new Date(license.created_at).toLocaleDateString()}</span>
+                        Created: <span className="font-medium">{formatDate(license.created_at)}</span>
                       </span>
                     </div>
                   </div>
@@ -854,7 +864,7 @@ export default function LicenseManagementPage() {
         </div>
       </div>
 
-      <AdminRanchInvitationPanel />
+      <AdminRanchInvitationPanel refreshTrigger={invitationRefreshTrigger} />
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-6">

@@ -32,7 +32,8 @@ function AppContent() {
       if (link && link.href.startsWith(window.location.origin)) {
         e.preventDefault();
         const url = new URL(link.href);
-        window.history.pushState({}, '', url.pathname);
+        const fullPath = url.pathname + url.search + url.hash;
+        window.history.pushState({}, '', fullPath);
         setCurrentRoute(url.pathname);
       }
     };

@@ -78,7 +78,7 @@ export function RanchMemberInvitationPanel() {
   };
 
   const handleCopyInvitation = (code: string) => {
-    const inviteLink = `${window.location.origin}/signup?invite=${code}`;
+    const inviteLink = `${window.location.origin}/redeem-invitation?code=${code}`;
     navigator.clipboard.writeText(inviteLink);
     showToast('Invitation link copied to clipboard!', 'success');
   };

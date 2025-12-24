@@ -41,10 +41,11 @@ export function SignUpPage() {
 
       if (invitationCode) {
         window.location.href = `/redeem-invitation?code=${invitationCode}`;
+      } else {
+        window.location.href = '/';
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign up');
-    } finally {
       setLoading(false);
     }
   };
@@ -155,7 +156,7 @@ export function SignUpPage() {
         <div className="mt-6 text-center">
           <p className="text-gray-600 text-sm">
             Already have an account?{' '}
-            <a href="/login" className="text-green-600 hover:text-green-700 font-medium">
+            <a href={invitationCode ? `/login?invite=${invitationCode}` : '/login'} className="text-green-600 hover:text-green-700 font-medium">
               Sign in
             </a>
           </p>

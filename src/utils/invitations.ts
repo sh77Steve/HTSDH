@@ -133,16 +133,6 @@ export async function validateInvitationCode(
       return { invitation: null, error: 'This invitation has expired' };
     }
 
-    const { data: currentUser } = await supabase.auth.getUser();
-    if (currentUser.user && data.restricted_email) {
-      if (currentUser.user.email !== data.restricted_email) {
-        return {
-          invitation: null,
-          error: `This invitation is restricted to ${data.restricted_email}`,
-        };
-      }
-    }
-
     return { invitation: data, error: null };
   } catch (error) {
     console.error('Error validating invitation:', error);

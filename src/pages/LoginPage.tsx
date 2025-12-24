@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn } from 'lucide-react';
 
@@ -8,6 +8,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('invite');
+    if (code) {
+      setInviteCode(code);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,9 +25,14 @@ export function LoginPage() {
 
     try {
       await signIn(email, password);
+
+      if (inviteCode) {
+        window.location.href = `/redeem-invitation?code=${inviteCode}`;
+      } else {
+        window.location.href = '/';
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
-    } finally {
       setLoading(false);
     }
   };
@@ -91,7 +105,7 @@ export function LoginPage() {
         <div className="mt-6 text-center">
           <p className="text-gray-600 text-sm">
             Don't have an account?{' '}
-            <a href="/signup" className="text-green-600 hover:text-green-700 font-medium">
+            <a href={inviteCode ? `/signup?invite=${inviteCode}` : '/signup'} className="text-green-600 hover:text-green-700 font-medium">
               Sign up
             </a>
           </p>

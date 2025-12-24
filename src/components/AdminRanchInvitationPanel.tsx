@@ -10,7 +10,11 @@ import {
 } from '../utils/invitations';
 import { supabase } from '../lib/supabase';
 
-export function AdminRanchInvitationPanel() {
+interface AdminRanchInvitationPanelProps {
+  refreshTrigger?: number;
+}
+
+export function AdminRanchInvitationPanel({ refreshTrigger }: AdminRanchInvitationPanelProps) {
   const { showToast } = useToast();
   const [licenseKeys, setLicenseKeys] = useState<LicenseKey[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -24,7 +28,7 @@ export function AdminRanchInvitationPanel() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [refreshTrigger]);
 
   const loadData = async () => {
     setLoading(true);
@@ -78,7 +82,7 @@ export function AdminRanchInvitationPanel() {
   };
 
   const handleCopyInvitation = (code: string) => {
-    const inviteLink = `${window.location.origin}/signup?invite=${code}`;
+    const inviteLink = `${window.location.origin}/redeem-invitation?code=${code}`;
     navigator.clipboard.writeText(inviteLink);
     showToast('Invitation link copied to clipboard!', 'success');
   };
@@ -96,7 +100,11 @@ export function AdminRanchInvitationPanel() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    const date = new Date(dateString);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${month}/${day}/${year}`;
   };
 
   if (loading) {
