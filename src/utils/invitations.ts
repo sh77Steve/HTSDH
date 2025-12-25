@@ -113,15 +113,23 @@ export async function validateInvitationCode(
   code: string
 ): Promise<{ invitation: Invitation | null; error: string | null }> {
   try {
+    console.log('Validating invitation code:', code.trim().toUpperCase());
+
     const { data, error } = await supabase
       .from('invitations')
       .select('*')
       .eq('code', code.trim().toUpperCase())
       .maybeSingle();
 
-    if (error) throw error;
+    console.log('Invitation query result:', { data, error });
+
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
 
     if (!data) {
+      console.log('No invitation found with code:', code.trim().toUpperCase());
       return { invitation: null, error: 'Invalid invitation code' };
     }
 

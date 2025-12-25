@@ -106,6 +106,19 @@ export function Layout({ children, currentPage }: LayoutProps) {
                   {item.name}
                 </a>
               ))}
+
+              {currentRanch && userRanches.length > 1 && (
+                <button
+                  onClick={() => {
+                    setShowRanchSelector(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-4 py-3 text-base font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-t border-gray-200"
+                >
+                  <Home className="w-5 h-5 mr-3" />
+                  <span>Switch Ranch: <strong>{currentRanch.name}</strong></span>
+                </button>
+              )}
             </div>
           </div>
         )}

@@ -21,6 +21,7 @@ export function InvitationRedemptionPage({ invitationCode }: InvitationRedemptio
   const [validating, setValidating] = useState(true);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [ranchName, setRanchName] = useState('');
   const [ranchLocation, setRanchLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +115,11 @@ export function InvitationRedemptionPage({ invitationCode }: InvitationRedemptio
 
     if (!password.trim()) {
       setError('Please enter a password');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
 
@@ -393,6 +399,22 @@ export function InvitationRedemptionPage({ invitationCode }: InvitationRedemptio
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password for this user"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              required
+              disabled={loading}
+              minLength={6}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Confirm Password <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               required
               disabled={loading}

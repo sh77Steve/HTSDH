@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabase';
 import { Save, Trash2, Upload, Plus, Edit2, X, Key, Shield, Lightbulb, Syringe, Download } from 'lucide-react';
 import { ImportModal } from '../components/ImportModal';
 import { TipsModal } from '../components/TipsModal';
-import { AdminRanchInvitationPanel } from '../components/AdminRanchInvitationPanel';
 import { RanchMemberInvitationPanel } from '../components/RanchMemberInvitationPanel';
 import { ANIMAL_TYPES, type AnimalType } from '../utils/animalTypes';
 import type { Database } from '../lib/database.types';
@@ -1376,34 +1375,30 @@ export function SettingsPage() {
         )}
 
         {isAdmin && (
-          <>
-            <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 space-y-6">
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Shield className="w-6 h-6 text-blue-600" />
-                  <h2 className="text-xl font-semibold text-blue-900">Admin Controls</h2>
-                </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  Administrative tools for system management
-                </p>
-
-                <a
-                  href="/license-management"
-                  className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left w-full max-w-md"
-                >
-                  <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Key className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">License Management</h3>
-                    <p className="text-sm text-gray-600">Generate and manage license keys</p>
-                  </div>
-                </a>
+          <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 space-y-6">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Shield className="w-6 h-6 text-blue-600" />
+                <h2 className="text-xl font-semibold text-blue-900">Admin Controls</h2>
               </div>
-            </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Administrative tools for system management
+              </p>
 
-            <AdminRanchInvitationPanel />
-          </>
+              <a
+                href="/license-management"
+                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left w-full max-w-md"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Key className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">License Management</h3>
+                  <p className="text-sm text-gray-600">Generate and manage license keys</p>
+                </div>
+              </a>
+            </div>
+          </div>
         )}
 
         <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-6">
