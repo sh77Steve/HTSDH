@@ -73,6 +73,7 @@ export default function LicenseManagementPage() {
     newPassword: '',
   });
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [settingUpDemo, setSettingUpDemo] = useState(false);
 
   useEffect(() => {
     checkAdminStatus();
@@ -377,6 +378,54 @@ export default function LicenseManagementPage() {
     }
   }
 
+  async function handleSetupDemoRanch() {
+    if (!user) {
+      showToast('You must be logged in to set up a demo ranch', 'error');
+      return;
+    }
+
+    setSettingUpDemo(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        showToast('No active session found. Please log in again.', 'error');
+        setSettingUpDemo(false);
+        return;
+      }
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-demo-ranch`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ forceRecreate: true })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to setup demo ranch: ${response.status}`);
+      }
+
+      if (result.success) {
+        showToast(result.message || 'Demo ranch created successfully!', 'success');
+        await loadRanches();
+      } else {
+        showToast(result.message || result.error || 'Failed to create demo ranch', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error setting up demo ranch:', error);
+      showToast(error?.message || 'Failed to setup demo ranch', 'error');
+    } finally {
+      setSettingUpDemo(false);
+    }
+  }
+
   const getLicenseStatus = (ranch: Ranch) => {
     if (!ranch.license_expiration) {
       return { status: 'No License', color: 'text-red-600' };
@@ -533,6 +582,14 @@ export default function LicenseManagementPage() {
             <h1 className="text-2xl font-bold text-gray-800">License Management</h1>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleSetupDemoRanch}
+              disabled={settingUpDemo}
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-5 h-5" />
+              {settingUpDemo ? 'Creating...' : 'Create Demo Ranch'}
+            </button>
             <button
               onClick={handleBackup}
               disabled={backingUp}

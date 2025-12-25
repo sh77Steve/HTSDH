@@ -21,9 +21,10 @@ interface AnimalDetailModalProps {
   onUpdate: () => void;
   onDelete: () => void;
   allAnimals: Animal[];
+  isReadOnly?: boolean;
 }
 
-export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals }: AnimalDetailModalProps) {
+export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals, isReadOnly = false }: AnimalDetailModalProps) {
   const { showToast } = useToast();
   const { currentRanch } = useRanch();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -401,29 +402,33 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           <div className="flex items-center gap-2">
             {!isEditing ? (
               <>
-                <button
-                  onClick={() => setShowCamera(true)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                  title="Take Photo"
-                  disabled={uploading}
-                >
-                  <Camera className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                  title="Upload Photo"
-                  disabled={uploading}
-                >
-                  <Upload className="w-5 h-5" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
+                {!isReadOnly && (
+                  <>
+                    <button
+                      onClick={() => setShowCamera(true)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                      title="Take Photo"
+                      disabled={uploading}
+                    >
+                      <Camera className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                      title="Upload Photo"
+                      disabled={uploading}
+                    >
+                      <Upload className="w-5 h-5" />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </>
+                )}
                 {photos.length > 0 && (
                   <button
                     onClick={() => setShowGallery(true)}
@@ -443,33 +448,37 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                 >
                   <FileText className="w-5 h-5" />
                 </button>
-                <button
-                  onClick={() => {
-                    if (!injectionFeatureEnabled) {
-                      alert('The injection feature is disabled. Go to Settings to enable this feature.');
-                      return;
-                    }
-                    setShowInjection(true);
-                  }}
-                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                  title="Administer Injection"
-                >
-                  <Syringe className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
-                  title="Edit"
-                >
-                  <Edit2 className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                  title="Delete"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                {!isReadOnly && (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (!injectionFeatureEnabled) {
+                          alert('The injection feature is disabled. Go to Settings to enable this feature.');
+                          return;
+                        }
+                        setShowInjection(true);
+                      }}
+                      className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                      title="Administer Injection"
+                    >
+                      <Syringe className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                      title="Edit"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
               </>
             ) : null}
             <button
@@ -920,6 +929,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             photos={photos}
             onClose={() => setShowGallery(false)}
             onDelete={handleDeletePhoto}
+            isReadOnly={isReadOnly}
           />
         )}
       </div>

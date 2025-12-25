@@ -8,9 +8,10 @@ interface PhotoGalleryProps {
   photos: AnimalPhoto[];
   onClose: () => void;
   onDelete: (photo: AnimalPhoto) => void;
+  isReadOnly?: boolean;
 }
 
-export function PhotoGallery({ photos, onClose, onDelete }: PhotoGalleryProps) {
+export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false }: PhotoGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (photos.length === 0) {
@@ -59,13 +60,15 @@ export function PhotoGallery({ photos, onClose, onDelete }: PhotoGalleryProps) {
         <X className="w-6 h-6" />
       </button>
 
-      <button
-        onClick={handleDeleteCurrent}
-        className="absolute top-4 left-4 p-2 text-white hover:bg-red-600 rounded-lg transition z-10"
-        title="Delete Photo"
-      >
-        <Trash className="w-6 h-6" />
-      </button>
+      {!isReadOnly && (
+        <button
+          onClick={handleDeleteCurrent}
+          className="absolute top-4 left-4 p-2 text-white hover:bg-red-600 rounded-lg transition z-10"
+          title="Delete Photo"
+        >
+          <Trash className="w-6 h-6" />
+        </button>
+      )}
 
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 text-white px-4 py-2 rounded-lg">
         {currentIndex + 1} / {photos.length}

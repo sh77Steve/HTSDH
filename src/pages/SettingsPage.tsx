@@ -25,7 +25,7 @@ interface Drug {
 }
 
 export function SettingsPage() {
-  const { currentRanch, currentUserRole, refreshRanchData } = useRanch();
+  const { currentRanch, currentUserRole, refreshRanchData, refreshRanches, selectRanch } = useRanch();
   const { user } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<RanchSettings | null>(null);
@@ -564,6 +564,7 @@ export function SettingsPage() {
       event.target.value = '';
     }
   };
+
 
   const handleDeleteAllData = async () => {
     if (deletePassword !== '!delete!') {
@@ -1267,21 +1268,23 @@ export function SettingsPage() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Import Data</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Import animal data from external sources
+              Import animal data from external sources or create demo data
             </p>
 
-            <button
-              onClick={() => setShowDataImport(true)}
-              className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left w-full max-w-md"
-            >
-              <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Upload className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Import RanchR Data</h3>
-                <p className="text-sm text-gray-600">Import cattle and treatments from RanchR CSV files</p>
-              </div>
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => setShowDataImport(true)}
+                className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left w-full max-w-md"
+              >
+                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Upload className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Import RanchR Data</h3>
+                  <p className="text-sm text-gray-600">Import cattle and treatments from RanchR CSV files</p>
+                </div>
+              </button>
+            </div>
 
             <p className="text-xs text-gray-500 italic mt-3">
               "RanchR" is a trademark of its respective owner. This app is not affiliated with or endorsed by RanchR.

@@ -13,8 +13,9 @@ import { ANIMAL_TYPES, getSexOptions, type AnimalType } from '../utils/animalTyp
 type Animal = Database['public']['Tables']['animals']['Row'];
 
 export function AnimalsPage() {
-  const { currentRanch, licenseInfo } = useRanch();
+  const { currentRanch, licenseInfo, currentUserRole } = useRanch();
   const { showToast } = useToast();
+  const isReadOnly = currentUserRole === 'VIEWER';
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'SOLD' | 'DEAD' | 'BUTCHERED'>('PRESENT');
@@ -240,24 +241,24 @@ export function AnimalsPage() {
           <div className="flex gap-2">
             <button
               onClick={() => {
-                if (licenseInfo.isReadOnly) {
-                  showToast('Cannot import in read-only mode. Please activate a valid license.', 'error');
+                if (licenseInfo.isReadOnly || isReadOnly) {
+                  showToast(isReadOnly ? 'You have read-only access to this ranch.' : 'Cannot import in read-only mode. Please activate a valid license.', 'error');
                 } else {
                   setShowImportModal(true);
                 }
               }}
-              disabled={licenseInfo.isReadOnly}
+              disabled={licenseInfo.isReadOnly || isReadOnly}
               className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {licenseInfo.isReadOnly ? <Lock className="w-5 h-5 mr-2" /> : <Upload className="w-5 h-5 mr-2" />}
+              {(licenseInfo.isReadOnly || isReadOnly) ? <Lock className="w-5 h-5 mr-2" /> : <Upload className="w-5 h-5 mr-2" />}
               Import CSV
             </button>
             <button
               onClick={handleOpenAddModal}
-              disabled={licenseInfo.isReadOnly}
+              disabled={licenseInfo.isReadOnly || isReadOnly}
               className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {licenseInfo.isReadOnly ? <Lock className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+              {(licenseInfo.isReadOnly || isReadOnly) ? <Lock className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
               Add Animal
             </button>
           </div>
@@ -419,6 +420,7 @@ export function AnimalsPage() {
               fetchAnimals();
             }}
             allAnimals={animals}
+            isReadOnly={isReadOnly}
           />
         )}
 
