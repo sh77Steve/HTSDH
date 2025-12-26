@@ -22,9 +22,10 @@ interface InjectionModalProps {
   ranchId: string;
   onClose: () => void;
   onUpdate: () => void;
+  isDemoMode?: boolean;
 }
 
-export function InjectionModal({ animal, ranchId, onClose, onUpdate }: InjectionModalProps) {
+export function InjectionModal({ animal, ranchId, onClose, onUpdate, isDemoMode = false }: InjectionModalProps) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -115,6 +116,14 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate }: Injection
 
     if (dose === null) {
       showToast('Unable to calculate dose', 'error');
+      return;
+    }
+
+    if (isDemoMode) {
+      const description = `${selectedDrug.drug_name} - ${dose.toFixed(2)} ml${adminNotes ? '\n' + adminNotes : ''}`;
+      const demoMessage = `Demonstration Mode - The following medical history was not added:\n\nDate: ${getTodayLocalDate()}\nDrug: ${selectedDrug.drug_name}\nDose: ${dose.toFixed(2)} ml\nWeight: ${weight} lbs${adminNotes ? '\nNotes: ' + adminNotes : ''}`;
+      alert(demoMessage);
+      onClose();
       return;
     }
 

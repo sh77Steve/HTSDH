@@ -22,9 +22,10 @@ interface AnimalDetailModalProps {
   onDelete: () => void;
   allAnimals: Animal[];
   isReadOnly?: boolean;
+  isDemoMode?: boolean;
 }
 
-export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals, isReadOnly = false }: AnimalDetailModalProps) {
+export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnimals, isReadOnly = false, isDemoMode = false }: AnimalDetailModalProps) {
   const { showToast } = useToast();
   const { currentRanch } = useRanch();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +63,12 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
 
 
   const handleSave = async () => {
+    if (isDemoMode) {
+      setIsEditing(false);
+      showToast('Demonstration Mode - Animal was not edited.', 'info');
+      return;
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -124,6 +131,11 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   };
 
   const handleDelete = async () => {
+    if (isDemoMode) {
+      showToast('Demonstration Mode - Animal was not deleted.', 'info');
+      return;
+    }
+
     if (!confirm('Are you sure you want to permanently delete this animal and all its history? This action cannot be undone.')) {
       return;
     }
@@ -245,8 +257,14 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   };
 
   const handlePhotoCapture = async (blob: Blob) => {
-    setUploading(true);
     setShowCamera(false);
+
+    if (isDemoMode) {
+      showToast('Demonstration Mode - Photo was not saved.', 'info');
+      return;
+    }
+
+    setUploading(true);
 
     try {
       const timestamp = Date.now();
@@ -292,6 +310,14 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
 
     if (!file.type.startsWith('image/')) {
       showToast('Please select a valid image file', 'error');
+      return;
+    }
+
+    if (isDemoMode) {
+      showToast('Demonstration Mode - Photo was not saved.', 'info');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
@@ -402,7 +428,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           <div className="flex items-center gap-2">
             {!isEditing ? (
               <>
-                {!isReadOnly && (
+                {(!isReadOnly || isDemoMode) && (
                   <>
                     <button
                       onClick={() => setShowCamera(true)}
@@ -448,11 +474,11 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                 >
                   <FileText className="w-5 h-5" />
                 </button>
-                {!isReadOnly && (
+                {(!isReadOnly || isDemoMode) && (
                   <>
                     <button
                       onClick={() => {
-                        if (!injectionFeatureEnabled) {
+                        if (!injectionFeatureEnabled && !isDemoMode) {
                           alert('The injection feature is disabled. Go to Settings to enable this feature.');
                           return;
                         }
@@ -905,6 +931,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             animalName={animal.name || animal.tag_number || 'Unknown'}
             ranchId={animal.ranch_id}
             onClose={() => setShowMedical(false)}
+            isDemoMode={isDemoMode}
           />
         )}
 
@@ -914,6 +941,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             ranchId={animal.ranch_id}
             onClose={() => setShowInjection(false)}
             onUpdate={onUpdate}
+            isDemoMode={isDemoMode}
           />
         )}
 
@@ -930,6 +958,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             onClose={() => setShowGallery(false)}
             onDelete={handleDeletePhoto}
             isReadOnly={isReadOnly}
+            isDemoMode={isDemoMode}
           />
         )}
       </div>

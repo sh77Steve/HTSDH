@@ -13,6 +13,7 @@ interface RanchContextType {
   loading: boolean;
   licenseInfo: LicenseInfo;
   currentUserRole: string | null;
+  isDemoMode: boolean;
   selectRanch: (ranchId: string) => void;
   createRanch: (name: string, location?: string) => Promise<void>;
   refreshRanches: () => Promise<void>;
@@ -26,8 +27,9 @@ export function RanchProvider({ children }: { children: ReactNode }) {
   const [currentRanch, setCurrentRanch] = useState<Ranch | null>(null);
   const [userRanches, setUserRanches] = useState<(UserRanch & { ranch: Ranch })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo>(checkLicenseStatus(null));
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo>(checkLicenseStatus(null, false));
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const fetchUserRanches = async () => {
     if (!user) {
@@ -73,12 +75,14 @@ export function RanchProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    const demoMode = user?.email === 'demo@example.com';
+    setIsDemoMode(demoMode);
     fetchUserRanches();
   }, [user]);
 
   useEffect(() => {
-    setLicenseInfo(checkLicenseStatus(currentRanch));
-  }, [currentRanch]);
+    setLicenseInfo(checkLicenseStatus(currentRanch, isDemoMode));
+  }, [currentRanch, isDemoMode]);
 
   const selectRanch = (ranchId: string) => {
     const ranch = userRanches.find(r => r.ranch_id === ranchId);
@@ -129,6 +133,7 @@ export function RanchProvider({ children }: { children: ReactNode }) {
       loading,
       licenseInfo,
       currentUserRole,
+      isDemoMode,
       selectRanch,
       createRanch,
       refreshRanches,

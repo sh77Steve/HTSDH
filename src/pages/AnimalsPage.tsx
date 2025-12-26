@@ -13,9 +13,9 @@ import { ANIMAL_TYPES, getSexOptions, type AnimalType } from '../utils/animalTyp
 type Animal = Database['public']['Tables']['animals']['Row'];
 
 export function AnimalsPage() {
-  const { currentRanch, licenseInfo, currentUserRole } = useRanch();
+  const { currentRanch, licenseInfo, currentUserRole, isDemoMode } = useRanch();
   const { showToast } = useToast();
-  const isReadOnly = currentUserRole === 'VIEWER';
+  const isReadOnly = currentUserRole === 'VIEWER' && !isDemoMode;
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'SOLD' | 'DEAD' | 'BUTCHERED'>('PRESENT');
@@ -180,6 +180,27 @@ export function AnimalsPage() {
       return;
     }
 
+    if (isDemoMode) {
+      setShowAddModal(false);
+      setFormData({
+        tag_number: '',
+        tag_color: '',
+        name: '',
+        animal_type: 'Cattle',
+        sex: 'BULL',
+        source: 'BORN',
+        birth_date: '',
+        weaning_date: '',
+        exit_date: '',
+        mother_id: '',
+        father_id: '',
+        notes: '',
+        description: '',
+      });
+      showToast('Demonstration Mode - Animal was not added.', 'info');
+      return;
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase.from('animals').insert({
@@ -241,24 +262,26 @@ export function AnimalsPage() {
           <div className="flex gap-2">
             <button
               onClick={() => {
-                if (licenseInfo.isReadOnly || isReadOnly) {
-                  showToast(isReadOnly ? 'You have read-only access to this ranch.' : 'Cannot import in read-only mode. Please activate a valid license.', 'error');
+                if (licenseInfo.mode === 'license_expired' || isReadOnly) {
+                  showToast(isReadOnly ? 'You have read-only access to this ranch.' : 'Cannot import - license expired. Please activate a valid license.', 'error');
+                } else if (isDemoMode) {
+                  showToast('Demonstration Mode - Import not available in demo mode.', 'info');
                 } else {
                   setShowImportModal(true);
                 }
               }}
-              disabled={licenseInfo.isReadOnly || isReadOnly}
+              disabled={licenseInfo.mode === 'license_expired' || isReadOnly}
               className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {(licenseInfo.isReadOnly || isReadOnly) ? <Lock className="w-5 h-5 mr-2" /> : <Upload className="w-5 h-5 mr-2" />}
+              {(licenseInfo.mode === 'license_expired' || isReadOnly) ? <Lock className="w-5 h-5 mr-2" /> : <Upload className="w-5 h-5 mr-2" />}
               Import CSV
             </button>
             <button
               onClick={handleOpenAddModal}
-              disabled={licenseInfo.isReadOnly || isReadOnly}
+              disabled={licenseInfo.mode === 'license_expired' || (licenseInfo.mode === 'max_animals_reached' && !isDemoMode) || isReadOnly}
               className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {(licenseInfo.isReadOnly || isReadOnly) ? <Lock className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+              {(licenseInfo.mode === 'license_expired' || (licenseInfo.mode === 'max_animals_reached' && !isDemoMode) || isReadOnly) ? <Lock className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
               Add Animal
             </button>
           </div>
@@ -421,6 +444,7 @@ export function AnimalsPage() {
             }}
             allAnimals={animals}
             isReadOnly={isReadOnly}
+            isDemoMode={isDemoMode}
           />
         )}
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { getTodayLocalDate } from '../utils/printHelpers';
 import type { Database } from '../lib/database.types';
 
@@ -12,10 +13,12 @@ interface MedicalHistoryModalProps {
   animalName: string;
   ranchId: string;
   onClose: () => void;
+  isDemoMode?: boolean;
 }
 
-export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: MedicalHistoryModalProps) {
+export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose, isDemoMode = false }: MedicalHistoryModalProps) {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [records, setRecords] = useState<MedicalHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -50,6 +53,17 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isDemoMode) {
+      setShowAddForm(false);
+      setFormData({
+        date: getTodayLocalDate(),
+        description: '',
+      });
+      showToast('Demonstration Mode - Medical record was not added.', 'info');
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -81,6 +95,16 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
     const record = records.find(r => r.id === id);
     if (!record) return;
 
+    if (isDemoMode) {
+      setEditingId(null);
+      setFormData({
+        date: getTodayLocalDate(),
+        description: '',
+      });
+      showToast('Demonstration Mode - Medical record was not updated.', 'info');
+      return;
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -108,6 +132,11 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose }: 
   };
 
   const handleDelete = async (id: string) => {
+    if (isDemoMode) {
+      showToast('Demonstration Mode - Medical record was not deleted.', 'info');
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this medical record?')) {
       return;
     }

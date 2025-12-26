@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Trash } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
 import type { Database } from '../lib/database.types';
 
 type AnimalPhoto = Database['public']['Tables']['animal_photos']['Row'];
@@ -9,9 +10,11 @@ interface PhotoGalleryProps {
   onClose: () => void;
   onDelete: (photo: AnimalPhoto) => void;
   isReadOnly?: boolean;
+  isDemoMode?: boolean;
 }
 
-export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false }: PhotoGalleryProps) {
+export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false, isDemoMode = false }: PhotoGalleryProps) {
+  const { showToast } = useToast();
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (photos.length === 0) {
@@ -42,6 +45,11 @@ export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false }: 
   };
 
   const handleDeleteCurrent = () => {
+    if (isDemoMode) {
+      showToast('Demonstration Mode - Photo was not deleted.', 'info');
+      return;
+    }
+
     if (confirm('Are you sure you want to delete this photo?')) {
       onDelete(currentPhoto);
       if (currentIndex >= photos.length - 1 && currentIndex > 0) {
@@ -60,7 +68,7 @@ export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false }: 
         <X className="w-6 h-6" />
       </button>
 
-      {!isReadOnly && (
+      {(!isReadOnly || isDemoMode) && (
         <button
           onClick={handleDeleteCurrent}
           className="absolute top-4 left-4 p-2 text-white hover:bg-red-600 rounded-lg transition z-10"

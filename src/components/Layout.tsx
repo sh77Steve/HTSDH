@@ -1,9 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRanch } from '../contexts/RanchContext';
 import { LogOut, Home, Search, FileText, Settings, Menu, X, HelpCircle } from 'lucide-react';
-import { useState } from 'react';
 import LicenseWarningBanner from './LicenseWarningBanner';
+import { DemoModeWelcomeModal } from './DemoModeWelcomeModal';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,12 +12,28 @@ interface LayoutProps {
 
 export function Layout({ children, currentPage }: LayoutProps) {
   const { signOut } = useAuth();
-  const { currentRanch, userRanches, selectRanch } = useRanch();
+  const { currentRanch, userRanches, selectRanch, isDemoMode } = useRanch();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRanchSelector, setShowRanchSelector] = useState(false);
+  const [showDemoWelcome, setShowDemoWelcome] = useState(false);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      const hasSeenDemoWelcome = sessionStorage.getItem('hasSeenDemoWelcome');
+      if (!hasSeenDemoWelcome) {
+        setShowDemoWelcome(true);
+      }
+    }
+  }, [isDemoMode]);
+
+  const handleCloseDemoWelcome = () => {
+    setShowDemoWelcome(false);
+    sessionStorage.setItem('hasSeenDemoWelcome', 'true');
+  };
 
   const handleSignOut = async () => {
     try {
+      sessionStorage.removeItem('hasSeenDemoWelcome');
       await signOut();
     } catch (error) {
       console.error('Error signing out:', error);
@@ -164,6 +180,10 @@ export function Layout({ children, currentPage }: LayoutProps) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+
+      {showDemoWelcome && (
+        <DemoModeWelcomeModal onClose={handleCloseDemoWelcome} />
+      )}
     </div>
   );
 }

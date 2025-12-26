@@ -8,8 +8,15 @@ export type LicenseStatus =
   | 'expired'
   | 'no_license';
 
+export type LicenseMode =
+  | 'normal'
+  | 'demonstration'
+  | 'license_expired'
+  | 'max_animals_reached';
+
 export interface LicenseInfo {
   status: LicenseStatus;
+  mode: LicenseMode;
   isReadOnly: boolean;
   daysUntilExpiration: number | null;
   daysInGracePeriod: number | null;
@@ -20,10 +27,11 @@ export interface LicenseInfo {
 
 const GRACE_PERIOD_DAYS = 30;
 
-export function checkLicenseStatus(ranch: Ranch | null): LicenseInfo {
+export function checkLicenseStatus(ranch: Ranch | null, isDemoMode: boolean = false): LicenseInfo {
   if (!ranch || !ranch.license_expiration) {
     return {
       status: 'no_license',
+      mode: isDemoMode ? 'demonstration' : 'license_expired',
       isReadOnly: true,
       daysUntilExpiration: null,
       daysInGracePeriod: null,
@@ -44,6 +52,7 @@ export function checkLicenseStatus(ranch: Ranch | null): LicenseInfo {
   if (daysDiff >= 0) {
     return {
       status: 'valid',
+      mode: isDemoMode ? 'demonstration' : 'normal',
       isReadOnly: false,
       daysUntilExpiration: daysDiff,
       daysInGracePeriod: null,
@@ -58,6 +67,7 @@ export function checkLicenseStatus(ranch: Ranch | null): LicenseInfo {
   if (daysExpired <= GRACE_PERIOD_DAYS) {
     return {
       status: 'grace_period',
+      mode: isDemoMode ? 'demonstration' : 'normal',
       isReadOnly: false,
       daysUntilExpiration: null,
       daysInGracePeriod: daysExpired,
@@ -69,6 +79,7 @@ export function checkLicenseStatus(ranch: Ranch | null): LicenseInfo {
 
   return {
     status: 'expired',
+    mode: isDemoMode ? 'demonstration' : 'license_expired',
     isReadOnly: true,
     daysUntilExpiration: null,
     daysInGracePeriod: null,
@@ -79,6 +90,10 @@ export function checkLicenseStatus(ranch: Ranch | null): LicenseInfo {
 }
 
 export function canAddAnimal(licenseInfo: LicenseInfo, currentAnimalCount: number): boolean {
+  if (licenseInfo.mode === 'demonstration') {
+    return true;
+  }
+
   if (licenseInfo.status === 'no_license' || licenseInfo.status === 'expired') {
     return false;
   }
@@ -91,6 +106,10 @@ export function canAddAnimal(licenseInfo: LicenseInfo, currentAnimalCount: numbe
 }
 
 export function getLicenseMessage(licenseInfo: LicenseInfo, currentAnimalCount: number): string | null {
+  if (licenseInfo.mode === 'demonstration') {
+    return null;
+  }
+
   if (licenseInfo.status === 'no_license') {
     return 'No active license. Please activate a license to add animals.';
   }
@@ -104,4 +123,23 @@ export function getLicenseMessage(licenseInfo: LicenseInfo, currentAnimalCount: 
   }
 
   return null;
+}
+
+export function updateLicenseMode(licenseInfo: LicenseInfo, currentAnimalCount: number): LicenseInfo {
+  if (licenseInfo.mode === 'demonstration') {
+    return licenseInfo;
+  }
+
+  if (licenseInfo.mode === 'license_expired') {
+    return licenseInfo;
+  }
+
+  if (licenseInfo.maxAnimals !== null && currentAnimalCount >= licenseInfo.maxAnimals) {
+    return {
+      ...licenseInfo,
+      mode: 'max_animals_reached',
+    };
+  }
+
+  return licenseInfo;
 }
