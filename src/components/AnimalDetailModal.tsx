@@ -332,7 +332,8 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           animal_id: animal.id,
           ranch_id: animal.ranch_id,
           storage_url: publicUrl,
-          is_primary: photos.length === 0
+          is_primary: photos.length === 0,
+          file_size_bytes: blob.size
         });
 
       if (dbError) throw dbError;
@@ -390,7 +391,8 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           animal_id: animal.id,
           ranch_id: animal.ranch_id,
           storage_url: publicUrl,
-          is_primary: photos.length === 0
+          is_primary: photos.length === 0,
+          file_size_bytes: file.size
         });
 
       if (dbError) throw dbError;

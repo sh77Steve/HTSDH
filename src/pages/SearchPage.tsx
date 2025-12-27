@@ -67,7 +67,7 @@ export function SearchPage() {
         }
       }
 
-      query = query.order('tag_number', { ascending: true });
+      query = query.order('tag_number', { ascending: true, nullsFirst: true });
 
       const { data, error } = await query;
 

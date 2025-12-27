@@ -4,6 +4,7 @@ import { useRanch } from '../contexts/RanchContext';
 import { LogOut, Home, Search, FileText, Settings, Menu, X, HelpCircle } from 'lucide-react';
 import LicenseWarningBanner from './LicenseWarningBanner';
 import { DemoModeWelcomeModal } from './DemoModeWelcomeModal';
+import { BackupWarningModal } from './BackupWarningModal';
 
 interface LayoutProps {
   children: ReactNode;
@@ -16,6 +17,8 @@ export function Layout({ children, currentPage }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRanchSelector, setShowRanchSelector] = useState(false);
   const [showDemoWelcome, setShowDemoWelcome] = useState(false);
+  const [showBackupWarning, setShowBackupWarning] = useState(false);
+  const [daysSinceBackup, setDaysSinceBackup] = useState<number | null>(null);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -26,9 +29,37 @@ export function Layout({ children, currentPage }: LayoutProps) {
     }
   }, [isDemoMode]);
 
+  useEffect(() => {
+    if (currentRanch && !isDemoMode) {
+      const hasSeenBackupWarning = sessionStorage.getItem(`backupWarning_${currentRanch.id}`);
+
+      if (!hasSeenBackupWarning && currentRanch.last_backup_date) {
+        const lastBackup = new Date(currentRanch.last_backup_date);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - lastBackup.getTime());
+        const daysSince = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        setDaysSinceBackup(daysSince);
+
+        if (daysSince > 7) {
+          setShowBackupWarning(true);
+        }
+      } else if (!hasSeenBackupWarning && !currentRanch.last_backup_date) {
+        setDaysSinceBackup(null);
+        setShowBackupWarning(true);
+      }
+    }
+  }, [currentRanch, isDemoMode]);
+
   const handleCloseDemoWelcome = () => {
     setShowDemoWelcome(false);
     sessionStorage.setItem('hasSeenDemoWelcome', 'true');
+  };
+
+  const handleCloseBackupWarning = () => {
+    setShowBackupWarning(false);
+    if (currentRanch) {
+      sessionStorage.setItem(`backupWarning_${currentRanch.id}`, 'true');
+    }
   };
 
   const handleSignOut = async () => {
@@ -183,6 +214,14 @@ export function Layout({ children, currentPage }: LayoutProps) {
 
       {showDemoWelcome && (
         <DemoModeWelcomeModal onClose={handleCloseDemoWelcome} />
+      )}
+
+      {showBackupWarning && currentRanch && (
+        <BackupWarningModal
+          lastBackupDate={currentRanch.last_backup_date}
+          daysSinceBackup={daysSinceBackup}
+          onClose={handleCloseBackupWarning}
+        />
       )}
     </div>
   );

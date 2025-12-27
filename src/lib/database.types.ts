@@ -24,6 +24,7 @@ export interface Database {
           license_type: LicenseType | null;
           license_expiration: string | null;
           license_activated_at: string | null;
+          last_backup_date: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -35,6 +36,7 @@ export interface Database {
           license_type?: LicenseType | null;
           license_expiration?: string | null;
           license_activated_at?: string | null;
+          last_backup_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -46,6 +48,7 @@ export interface Database {
           license_type?: LicenseType | null;
           license_expiration?: string | null;
           license_activated_at?: string | null;
+          last_backup_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -231,6 +234,7 @@ export interface Database {
           taken_by_user_id: string | null;
           is_primary: boolean;
           is_synced: boolean;
+          file_size_bytes: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -245,6 +249,7 @@ export interface Database {
           taken_by_user_id?: string | null;
           is_primary?: boolean;
           is_synced?: boolean;
+          file_size_bytes?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -259,6 +264,7 @@ export interface Database {
           taken_by_user_id?: string | null;
           is_primary?: boolean;
           is_synced?: boolean;
+          file_size_bytes?: number | null;
           created_at?: string;
           updated_at?: string;
         };

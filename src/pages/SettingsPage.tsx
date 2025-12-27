@@ -35,6 +35,7 @@ export function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [backupCreatedForDelete, setBackupCreatedForDelete] = useState(false);
   const [showDataImport, setShowDataImport] = useState(false);
   const [showTipsModal, setShowTipsModal] = useState(false);
   const [showInjectionDisclaimer, setShowInjectionDisclaimer] = useState(false);
@@ -55,7 +56,11 @@ export function SettingsPage() {
   const [editingField, setEditingField] = useState<CustomFieldDefinition | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ranchName, setRanchName] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
   const [savingRanchName, setSavingRanchName] = useState(false);
+  const [savingContactInfo, setSavingContactInfo] = useState(false);
   const [fieldForm, setFieldForm] = useState({
     field_name: '',
     field_type: 'text' as 'text' | 'dollar' | 'integer' | 'decimal',
@@ -81,6 +86,9 @@ export function SettingsPage() {
       fetchCustomFields();
       fetchDrugs();
       setRanchName(currentRanch.name);
+      setContactName(currentRanch.contact_name || '');
+      setContactEmail(currentRanch.contact_email || '');
+      setContactPhone(currentRanch.contact_phone || '');
     }
   }, [currentRanch]);
 
@@ -217,6 +225,35 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save ranch name' });
     } finally {
       setSavingRanchName(false);
+    }
+  };
+
+  const handleSaveContactInfo = async () => {
+    if (!currentRanch) return;
+
+    setSavingContactInfo(true);
+    setMessage(null);
+
+    try {
+      const { error } = await supabase
+        .from('ranches')
+        .update({
+          contact_name: contactName.trim() || null,
+          contact_email: contactEmail.trim() || null,
+          contact_phone: contactPhone.trim() || null,
+        })
+        .eq('id', currentRanch.id);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: 'Contact information saved successfully' });
+      await refreshRanchData();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error saving contact information:', error);
+      setMessage({ type: 'error', text: 'Failed to save contact information' });
+    } finally {
+      setSavingContactInfo(false);
     }
   };
 
@@ -528,8 +565,18 @@ export function SettingsPage() {
         currentRanch.id
       );
 
-      downloadComprehensiveBackup(backupBlob);
+      downloadComprehensiveBackup(backupBlob, currentRanch.name);
 
+      const { error: updateError } = await supabase
+        .from('ranches')
+        .update({ last_backup_date: new Date().toISOString() })
+        .eq('id', currentRanch.id);
+
+      if (updateError) {
+        console.error('Error updating backup timestamp:', updateError);
+      }
+
+      setBackupCreatedForDelete(true);
       showToast('Backup exported successfully with all photos', 'success');
     } catch (error: any) {
       console.error('Error creating comprehensive backup:', error);
@@ -574,6 +621,11 @@ export function SettingsPage() {
       return;
     }
 
+    if (!backupCreatedForDelete) {
+      setMessage({ type: 'error', text: 'You must create a backup before deleting all data.' });
+      return;
+    }
+
     if (!currentRanch) return;
 
     setDeleting(true);
@@ -597,6 +649,7 @@ export function SettingsPage() {
       setMessage({ type: 'success', text: 'All cattle and related data deleted successfully' });
       setShowDeleteConfirm(false);
       setDeletePassword('');
+      setBackupCreatedForDelete(false);
       setTimeout(() => setMessage(null), 5000);
     } catch (error) {
       console.error('Error deleting data:', error);
@@ -665,27 +718,87 @@ export function SettingsPage() {
               Basic information about your ranch
             </p>
 
-            <div className="flex gap-3 max-w-2xl">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ranch Name
-                </label>
-                <input
-                  type="text"
-                  value={ranchName}
-                  onChange={(e) => setRanchName(e.target.value)}
-                  placeholder="Enter ranch name"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ranch Name
+                  </label>
+                  <input
+                    type="text"
+                    value={ranchName}
+                    onChange={(e) => setRanchName(e.target.value)}
+                    placeholder="Enter ranch name"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleSaveRanchName}
+                    disabled={savingRanchName || !ranchName.trim() || ranchName === currentRanch?.name}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {savingRanchName ? 'Saving...' : 'Save Name'}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-end">
-                <button
-                  onClick={handleSaveRanchName}
-                  disabled={savingRanchName || !ranchName.trim() || ranchName === currentRanch?.name}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {savingRanchName ? 'Saving...' : 'Save Name'}
-                </button>
+
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-3">Contact Information</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Primary contact information for this ranch
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Contact Name
+                    </label>
+                    <input
+                      type="text"
+                      value={contactName}
+                      onChange={(e) => setContactName(e.target.value)}
+                      placeholder="Enter contact name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Contact Email
+                    </label>
+                    <input
+                      type="email"
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      placeholder="Enter email address"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Contact Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={contactPhone}
+                      onChange={(e) => setContactPhone(e.target.value)}
+                      placeholder="Enter phone number"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveContactInfo}
+                    disabled={savingContactInfo}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingContactInfo ? 'Saving...' : 'Save Contact Info'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1434,6 +1547,36 @@ export function SettingsPage() {
                   </p>
                 </div>
 
+                {!backupCreatedForDelete && (
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                    <p className="text-sm text-yellow-900 font-medium mb-2">
+                      Backup Required
+                    </p>
+                    <p className="text-sm text-yellow-800 mb-3">
+                      You must export a complete backup before deleting all data. This ensures you have a copy of your data in case you need it later.
+                    </p>
+                    <button
+                      onClick={handleExportComprehensiveBackup}
+                      disabled={exportingBackup}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Download className="w-5 h-5 mr-2" />
+                      {exportingBackup ? 'Creating Backup...' : 'Export Backup Now'}
+                    </button>
+                  </div>
+                )}
+
+                {backupCreatedForDelete && (
+                  <div className="bg-green-50 border border-green-300 rounded-lg p-4">
+                    <p className="text-sm text-green-900 font-medium mb-1">
+                      Backup Created
+                    </p>
+                    <p className="text-sm text-green-800">
+                      Your backup has been downloaded. You can now proceed with deletion if needed.
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Type <code className="bg-gray-100 px-2 py-1 rounded text-red-600 font-mono">!delete!</code> to confirm
@@ -1443,7 +1586,8 @@ export function SettingsPage() {
                     value={deletePassword}
                     onChange={(e) => setDeletePassword(e.target.value)}
                     placeholder="Type !delete! to confirm"
-                    className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    disabled={!backupCreatedForDelete}
+                    className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -1452,6 +1596,7 @@ export function SettingsPage() {
                     onClick={() => {
                       setShowDeleteConfirm(false);
                       setDeletePassword('');
+                      setBackupCreatedForDelete(false);
                     }}
                     disabled={deleting}
                     className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
@@ -1460,7 +1605,7 @@ export function SettingsPage() {
                   </button>
                   <button
                     onClick={handleDeleteAllData}
-                    disabled={deleting || deletePassword !== '!delete!'}
+                    disabled={deleting || deletePassword !== '!delete!' || !backupCreatedForDelete}
                     className="inline-flex items-center px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-5 h-5 mr-2" />

@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { Key, HelpCircle, RefreshCw } from 'lucide-react';
 
 export function LicenseHelpPage() {
-  const { currentRanch, licenseInfo, refreshRanch } = useRanch();
+  const { currentRanch, licenseInfo, refreshRanchData } = useRanch();
   const { showToast } = useToast();
   const [licenseKey, setLicenseKey] = useState('');
   const [activating, setActivating] = useState(false);
@@ -95,7 +95,7 @@ export function LicenseHelpPage() {
 
       showToast('License activated successfully!', 'success');
       setLicenseKey('');
-      await refreshRanch();
+      await refreshRanchData();
       setShowTermsReminder(true);
     } catch (error) {
       console.error('Error activating license:', error);
@@ -124,7 +124,7 @@ export function LicenseHelpPage() {
       if (error) throw error;
 
       showToast('Contact information saved', 'success');
-      await refreshRanch();
+      await refreshRanchData();
     } catch (error) {
       console.error('Error saving contact info:', error);
       showToast('Failed to save contact information', 'error');

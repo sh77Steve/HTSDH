@@ -6,9 +6,10 @@ import { generateLicenseKey } from '../utils/licenseKeyGenerator';
 import { MessageList } from '../components/MessageList';
 import { SendMessage } from '../components/SendMessage';
 import { AdminRanchInvitationPanel } from '../components/AdminRanchInvitationPanel';
-import { Key, Plus, CheckCircle, XCircle, ArrowLeft, Users, RefreshCw, Lock, MessageSquare, Send, FileText, Upload, Download, UploadCloud } from 'lucide-react';
+import { Key, Plus, CheckCircle, XCircle, ArrowLeft, Users, RefreshCw, Lock, MessageSquare, Send, FileText, Upload, Download, UploadCloud, BarChart3 } from 'lucide-react';
 import type { LicenseType } from '../lib/database.types';
 import { downloadBackup, restoreFromBackup } from '../utils/backupRestore';
+import { generateSystemReport, exportSystemReportToCSV, downloadCSV, type SystemReportSummary } from '../utils/systemReport';
 
 interface LicenseKey {
   id: string;
@@ -74,6 +75,10 @@ export default function LicenseManagementPage() {
   });
   const [resettingPassword, setResettingPassword] = useState(false);
   const [settingUpDemo, setSettingUpDemo] = useState(false);
+  const [showSystemReport, setShowSystemReport] = useState(false);
+  const [systemReport, setSystemReport] = useState<SystemReportSummary | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportProgress, setReportProgress] = useState('');
 
   useEffect(() => {
     checkAdminStatus();
@@ -426,6 +431,36 @@ export default function LicenseManagementPage() {
     }
   }
 
+  async function handleGenerateSystemReport() {
+    setGeneratingReport(true);
+    setReportProgress('Starting report generation...');
+    setShowSystemReport(true);
+
+    try {
+      const report = await generateSystemReport((message) => {
+        setReportProgress(message);
+      });
+      setSystemReport(report);
+      showToast('System report generated successfully', 'success');
+    } catch (error: any) {
+      console.error('Error generating system report:', error);
+      showToast(`Failed to generate report: ${error.message}`, 'error');
+      setShowSystemReport(false);
+    } finally {
+      setGeneratingReport(false);
+      setReportProgress('');
+    }
+  }
+
+  function handleExportReport() {
+    if (!systemReport) return;
+
+    const csvContent = exportSystemReportToCSV(systemReport);
+    const timestamp = new Date().toISOString().split('T')[0];
+    downloadCSV(csvContent, `system-report-${timestamp}.csv`);
+    showToast('Report exported successfully', 'success');
+  }
+
   const getLicenseStatus = (ranch: Ranch) => {
     if (!ranch.license_expiration) {
       return { status: 'No License', color: 'text-red-600' };
@@ -581,7 +616,15 @@ export default function LicenseManagementPage() {
             <Key className="w-8 h-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-800">License Management</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleGenerateSystemReport}
+              disabled={generatingReport}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <BarChart3 className="w-5 h-5" />
+              {generatingReport ? 'Generating...' : 'System Report'}
+            </button>
             <button
               onClick={handleSetupDemoRanch}
               disabled={settingUpDemo}
@@ -607,7 +650,7 @@ export default function LicenseManagementPage() {
             </button>
             <button
               onClick={() => setShowTipsImport(!showTipsImport)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
             >
               <FileText className="w-5 h-5" />
               Import Tips
@@ -636,6 +679,163 @@ export default function LicenseManagementPage() {
               <RefreshCw className="w-5 h-5 text-orange-600 animate-spin" />
               <p className="text-gray-700">{backupProgress}</p>
             </div>
+          </div>
+        )}
+
+        {showSystemReport && (
+          <div className="mb-6 p-6 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">System Report</h2>
+              <div className="flex gap-2">
+                {systemReport && (
+                  <button
+                    onClick={handleExportReport}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowSystemReport(false);
+                    setSystemReport(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {generatingReport && (
+              <div className="mb-4 p-3 bg-white rounded-lg border border-slate-300">
+                <div className="flex items-center gap-3">
+                  <RefreshCw className="w-5 h-5 text-slate-600 animate-spin" />
+                  <p className="text-gray-700">{reportProgress}</p>
+                </div>
+              </div>
+            )}
+
+            {systemReport && (
+              <>
+                <div className="mb-6 p-4 bg-white rounded-lg border border-slate-300">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Summary</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Total Ranches</p>
+                      <p className="text-2xl font-bold text-gray-900">{systemReport.totalRanches}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Animals</p>
+                      <p className="text-2xl font-bold text-gray-900">{systemReport.totalAnimals}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Photo Storage</p>
+                      <p className="text-2xl font-bold text-gray-900">{systemReport.totalPhotoStorageMB} MB</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Est. Database Size</p>
+                      <p className="text-2xl font-bold text-gray-900">{systemReport.totalEstimatedDataMB} MB</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">
+                    Generated at: {new Date(systemReport.generatedAt).toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-lg border border-slate-300 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-100 border-b border-slate-300">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Ranch</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Contact</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">License</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Last Backup</th>
+                          <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Animals</th>
+                          <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Records</th>
+                          <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Photos</th>
+                          <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Storage (MB)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {systemReport.ranches.map((ranch) => {
+                          const expirationDate = ranch.licenseExpiration
+                            ? new Date(ranch.licenseExpiration)
+                            : null;
+                          const today = new Date();
+                          const isExpired = expirationDate && expirationDate < today;
+
+                          return (
+                            <tr key={ranch.ranchId} className="hover:bg-slate-50">
+                              <td className="px-4 py-3">
+                                <div>
+                                  <p className="font-medium text-gray-900">{ranch.ranchName}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {ranch.currentAnimals} / {ranch.maxAnimals || 'N/A'}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm">
+                                  <p className="text-gray-900">{ranch.contactName || 'N/A'}</p>
+                                  <p className="text-xs text-gray-500">{ranch.contactEmail || 'No email'}</p>
+                                  <p className="text-xs text-gray-500">{ranch.contactPhone || 'No phone'}</p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm">
+                                  <p className="text-gray-900">{ranch.licenseType || 'None'}</p>
+                                  {ranch.licenseExpiration && (
+                                    <p className={`text-xs ${isExpired ? 'text-red-600' : 'text-gray-500'}`}>
+                                      {expirationDate?.toLocaleDateString()}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm">
+                                  {ranch.lastBackupDate ? (
+                                    <>
+                                      <p className="text-gray-900">
+                                        {new Date(ranch.lastBackupDate).toLocaleDateString()}
+                                      </p>
+                                      <p className={`text-xs ${ranch.daysSinceLastBackup && ranch.daysSinceLastBackup > 7 ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                        {ranch.daysSinceLastBackup} days ago
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <p className="text-red-600 font-semibold text-xs">Never</p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right text-sm text-gray-900">
+                                {ranch.animalCount}
+                              </td>
+                              <td className="px-4 py-3 text-right text-sm text-gray-900">
+                                {ranch.medicalRecordsCount}
+                              </td>
+                              <td className="px-4 py-3 text-right text-sm text-gray-900">
+                                {ranch.photosCount}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="text-sm">
+                                  <p className="text-gray-900 font-medium">{ranch.photoStorageMB.toFixed(2)}</p>
+                                  <p className="text-xs text-gray-500">
+                                    +{ranch.estimatedDataKB.toFixed(0)} KB
+                                  </p>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 

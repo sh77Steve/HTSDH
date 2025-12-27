@@ -125,6 +125,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
             is_primary: existingPhotosCount === 0,
             description: `Imported photo for ${animal?.name || animal?.tag_number || 'animal'}`,
             is_synced: true,
+            file_size_bytes: img.file.size
           });
 
         if (dbError) throw dbError;

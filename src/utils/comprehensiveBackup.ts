@@ -118,41 +118,73 @@ async function addPhotosToZip(
   const photosFolder = zip.folder('photos');
   if (!photosFolder) return;
 
-  for (const animal of animals) {
-    if (!animal.photo_count || animal.photo_count === 0) continue;
+  const animalIds = animals.map(a => a.id);
+  if (animalIds.length === 0) return;
 
-    for (let i = 0; i < animal.photo_count; i++) {
-      try {
-        const path = `${ranchId}/${animal.id}/${i}.jpg`;
+  const { data: photoRecords, error: photoError } = await supabase
+    .from('animal_photos')
+    .select('id, animal_id, storage_url')
+    .eq('ranch_id', ranchId)
+    .in('animal_id', animalIds);
 
-        const { data, error } = await supabase.storage
-          .from('animal-photos')
-          .download(path);
+  if (photoError) {
+    console.error('Failed to fetch photo records:', photoError);
+    return;
+  }
 
-        if (error) {
-          console.warn(`Failed to download photo for animal ${animal.tag_number}: ${error.message}`);
-          continue;
-        }
+  if (!photoRecords || photoRecords.length === 0) {
+    console.log('No photos found in database');
+    return;
+  }
 
-        if (data) {
-          const safeTagNumber = (animal.tag_number || 'NoTag').replace(/[^a-zA-Z0-9]/g, '_');
-          const filename = `${animal.id}_${safeTagNumber}_${i + 1}.jpg`;
-          photosFolder.file(filename, data);
-        }
-      } catch (err) {
-        console.warn(`Error downloading photo for animal ${animal.tag_number}:`, err);
+  console.log(`Found ${photoRecords.length} photos to backup`);
+
+  for (const photoRecord of photoRecords) {
+    try {
+      const animal = animals.find(a => a.id === photoRecord.animal_id);
+      if (!animal) continue;
+
+      const storagePath = photoRecord.storage_url.replace(
+        /^.*\/animal-photos\//,
+        ''
+      );
+
+      const { data, error } = await supabase.storage
+        .from('animal-photos')
+        .download(storagePath);
+
+      if (error) {
+        console.warn(`Failed to download photo ${photoRecord.id}: ${error.message}`);
+        continue;
       }
+
+      if (data) {
+        const safeTagNumber = (animal.tag_number || 'NoTag').replace(/[^a-zA-Z0-9]/g, '_');
+        const photoIdShort = photoRecord.id.split('-')[0];
+        const filename = `${animal.id}_${safeTagNumber}_${photoIdShort}.jpg`;
+        photosFolder.file(filename, data);
+      }
+    } catch (err) {
+      console.warn(`Error downloading photo ${photoRecord.id}:`, err);
     }
   }
 }
 
-export function downloadComprehensiveBackup(blob: Blob) {
+export function downloadComprehensiveBackup(blob: Blob, ranchName?: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
 
   const timestamp = new Date().toISOString().split('T')[0];
-  link.download = `AmadorHerdInfo_Complete_Backup_${timestamp}.zip`;
+
+  let safeRanchName: string;
+  if (ranchName && ranchName.trim()) {
+    safeRanchName = ranchName.trim().replace(/[^a-zA-Z0-9]/g, '_');
+  } else {
+    safeRanchName = `Ranch_${Date.now()}`;
+  }
+
+  link.download = `${safeRanchName}_Complete_Backup_${timestamp}.zip`;
 
   document.body.appendChild(link);
   link.click();

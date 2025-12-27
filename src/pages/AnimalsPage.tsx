@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { AnimalDetailModal } from '../components/AnimalDetailModal';
-import { ImportModal } from '../components/ImportModal';
+import { GenericCSVImportModal } from '../components/GenericCSVImportModal';
 import { useRanch } from '../contexts/RanchContext';
 import { useToast } from '../contexts/ToastContext';
 import { supabase } from '../lib/supabase';
@@ -58,7 +58,7 @@ export function AnimalsPage() {
         .from('animals')
         .select('*')
         .eq('ranch_id', currentRanch.id)
-        .order('tag_number', { ascending: true });
+        .order('tag_number', { ascending: true, nullsFirst: true });
 
       if (statusFilter !== 'ALL') {
         query = query.eq('status', statusFilter);
@@ -449,7 +449,7 @@ export function AnimalsPage() {
         )}
 
         {showImportModal && (
-          <ImportModal
+          <GenericCSVImportModal
             onClose={() => setShowImportModal(false)}
             onComplete={() => {
               setShowImportModal(false);
