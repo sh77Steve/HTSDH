@@ -3,7 +3,7 @@ import { X, Syringe, Calculator } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getTodayLocalDate } from '../utils/printHelpers';
+import { getTodayLocalDate, parseLocalDate } from '../utils/printHelpers';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
@@ -12,6 +12,7 @@ type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
 interface Drug {
   id: string;
   drug_name: string;
+  animal_type: string;
   ccs_per_pound: number | null;
   fixed_dose_ml: number | null;
   notes: string | null;
@@ -37,6 +38,7 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate, isDemoMode 
     (animal as any).weight_lbs?.toString() || ''
   );
   const [selectedDrugId, setSelectedDrugId] = useState<string>('');
+  const [injectionDate, setInjectionDate] = useState<string>(getTodayLocalDate());
   const [adminNotes, setAdminNotes] = useState<string>('');
 
   const [showWeightCalculator, setShowWeightCalculator] = useState(false);
@@ -121,7 +123,7 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate, isDemoMode 
 
     if (isDemoMode) {
       const description = `${selectedDrug.drug_name} - ${dose.toFixed(2)} ml${adminNotes ? '\n' + adminNotes : ''}`;
-      const demoMessage = `Demonstration Mode - The following medical history was not added:\n\nDate: ${getTodayLocalDate()}\nDrug: ${selectedDrug.drug_name}\nDose: ${dose.toFixed(2)} ml\nWeight: ${weight} lbs${adminNotes ? '\nNotes: ' + adminNotes : ''}`;
+      const demoMessage = `Demonstration Mode - The following medical history was not added:\n\nDate: ${injectionDate}\nDrug: ${selectedDrug.drug_name}\nDose: ${dose.toFixed(2)} ml\nWeight: ${weight} lbs${adminNotes ? '\nNotes: ' + adminNotes : ''}`;
       alert(demoMessage);
       onClose();
       return;
@@ -135,7 +137,7 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate, isDemoMode 
       const { error: historyError } = await supabase.from('medical_history').insert({
         animal_id: animal.id,
         ranch_id: ranchId,
-        date: getTodayLocalDate(),
+        date: injectionDate,
         description,
         created_by_user_id: user?.id || null,
       });
@@ -170,7 +172,7 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate, isDemoMode 
   };
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
+    return parseLocalDate(date).toLocaleDateString();
   };
 
   const getWeightFormula = (animalType: string) => {
@@ -284,6 +286,20 @@ export function InjectionModal({ animal, ranchId, onClose, onUpdate, isDemoMode 
               </div>
 
               <form onSubmit={handleAdminister} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Injection Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={injectionDate}
+                    onChange={(e) => setInjectionDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Date the injection was/will be administered</p>
+                </div>
+
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <label className="block text-sm font-medium text-gray-700">

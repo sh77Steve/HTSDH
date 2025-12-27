@@ -19,6 +19,7 @@ type CustomFieldDefinition = Database['public']['Tables']['custom_field_definiti
 interface Drug {
   id: string;
   drug_name: string;
+  animal_type: string;
   ccs_per_pound: number | null;
   fixed_dose_ml: number | null;
   notes: string | null;
@@ -371,6 +372,7 @@ export function SettingsPage() {
         .from('drugs')
         .select('*')
         .eq('ranch_id', currentRanch.id)
+        .order('animal_type', { ascending: true })
         .order('drug_name', { ascending: true });
 
       if (error) throw error;
@@ -397,7 +399,7 @@ export function SettingsPage() {
     setEditingDrug(drug);
     setDrugForm({
       drug_name: drug.drug_name,
-      animal_type: ((drug as any).animal_type || 'Cattle') as AnimalType,
+      animal_type: (drug.animal_type || 'Cattle') as AnimalType,
       dose_type: drug.ccs_per_pound !== null ? 'per_pound' : 'fixed',
       ccs_per_pound: drug.ccs_per_pound?.toString() || '',
       fixed_dose_ml: drug.fixed_dose_ml?.toString() || '',
@@ -1098,6 +1100,7 @@ export function SettingsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Animal Type</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Drug Name</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Dosage</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Notes</th>
@@ -1107,6 +1110,7 @@ export function SettingsPage() {
                 <tbody className="divide-y divide-gray-200">
                   {drugs.map((drug) => (
                     <tr key={drug.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">{drug.animal_type || 'Cattle'}</td>
                       <td className="px-4 py-3 text-sm text-gray-900">{drug.drug_name}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {drug.ccs_per_pound !== null

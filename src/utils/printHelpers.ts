@@ -54,9 +54,15 @@ export function downloadPDF(elementId: string, filename: string) {
   printReport(elementId);
 }
 
+export function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function formatDateForDisplay(date: string | null): string {
   if (!date) return '-';
-  return new Date(date).toLocaleDateString('en-US', {
+  const localDate = parseLocalDate(date);
+  return localDate.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

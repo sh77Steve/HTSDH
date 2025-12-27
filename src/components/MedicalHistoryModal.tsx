@@ -3,7 +3,7 @@ import { X, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getTodayLocalDate } from '../utils/printHelpers';
+import { getTodayLocalDate, parseLocalDate } from '../utils/printHelpers';
 import type { Database } from '../lib/database.types';
 
 type MedicalHistory = Database['public']['Tables']['medical_history']['Row'];
@@ -173,7 +173,7 @@ export function MedicalHistoryModal({ animalId, animalName, ranchId, onClose, is
   };
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
+    return parseLocalDate(date).toLocaleDateString();
   };
 
   return (

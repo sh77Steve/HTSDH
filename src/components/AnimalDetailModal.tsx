@@ -8,6 +8,7 @@ import { PhotoGallery } from './PhotoGallery';
 import { useToast } from '../contexts/ToastContext';
 import { useRanch } from '../contexts/RanchContext';
 import { ANIMAL_TYPES, getSexOptions, type AnimalType } from '../utils/animalTypes';
+import { parseLocalDate } from '../utils/printHelpers';
 import type { Database } from '../lib/database.types';
 
 type Animal = Database['public']['Tables']['animals']['Row'];
@@ -121,7 +122,8 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
       }
 
       setIsEditing(false);
-      onUpdate();
+      await refreshAnimalData();
+      showToast('Animal updated successfully', 'success');
     } catch (error: any) {
       console.error('Error updating animal:', error);
       alert(`Failed to update animal: ${error?.message || 'Unknown error'}`);
@@ -156,9 +158,14 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     }
   };
 
+  const handleClose = () => {
+    onUpdate();
+    onClose();
+  };
+
   const formatDate = (date: string | null) => {
     if (!date) return 'Not set';
-    return new Date(date).toLocaleDateString();
+    return parseLocalDate(date).toLocaleDateString();
   };
 
   const getAge = (birthDate: string | null) => {
@@ -253,6 +260,42 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
       console.error('Error loading photos:', error);
     } finally {
       setLoadingPhotos(false);
+    }
+  };
+
+  const refreshAnimalData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('animals')
+        .select('*')
+        .eq('id', animal.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        Object.assign(animal, data);
+        setFormData({
+          tag_number: data.tag_number || '',
+          tag_color: data.tag_color || '',
+          name: data.name || '',
+          animal_type: ((data as any).animal_type || 'Cattle') as AnimalType,
+          sex: data.sex,
+          source: data.source,
+          status: data.status,
+          birth_date: data.birth_date || '',
+          weaning_date: data.weaning_date || '',
+          exit_date: data.exit_date || '',
+          sale_price: (data as any).sale_price || '',
+          mother_id: data.mother_id || '',
+          father_id: (data as any).father_id || '',
+          weight_lbs: (data as any).weight_lbs || '',
+          notes: data.notes || '',
+          description: data.description || '',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error refreshing animal data:', error);
     }
   };
 
@@ -508,7 +551,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
               </>
             ) : null}
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
             >
               <X className="w-5 h-5" />
@@ -940,7 +983,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
             animal={animal}
             ranchId={animal.ranch_id}
             onClose={() => setShowInjection(false)}
-            onUpdate={onUpdate}
+            onUpdate={refreshAnimalData}
             isDemoMode={isDemoMode}
           />
         )}
