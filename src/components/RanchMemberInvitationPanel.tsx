@@ -78,10 +78,22 @@ export function RanchMemberInvitationPanel() {
   };
 
   const handleCopyInvitation = (code: string) => {
-    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+    const isDevelopment = window.location.hostname.includes('webcontainer') ||
+                         window.location.hostname.includes('localhost') ||
+                         window.location.hostname.includes('bolt.new');
+
+    const baseUrl = isDevelopment && import.meta.env.VITE_PRODUCTION_URL
+      ? import.meta.env.VITE_PRODUCTION_URL
+      : window.location.origin;
+
     const inviteLink = `${baseUrl}/redeem-invitation?code=${code}`;
     navigator.clipboard.writeText(inviteLink);
-    showToast('Invitation link copied to clipboard!', 'success');
+
+    if (isDevelopment && import.meta.env.VITE_PRODUCTION_URL) {
+      showToast('Invitation link copied (using production URL)!', 'success');
+    } else {
+      showToast('Invitation link copied to clipboard!', 'success');
+    }
   };
 
   const handleDeleteInvitation = async (invitationId: string) => {
