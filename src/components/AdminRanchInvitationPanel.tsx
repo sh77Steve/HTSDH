@@ -82,7 +82,8 @@ export function AdminRanchInvitationPanel({ refreshTrigger }: AdminRanchInvitati
   };
 
   const handleCopyInvitation = (code: string) => {
-    const inviteLink = `${window.location.origin}/redeem-invitation?code=${code}`;
+    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+    const inviteLink = `${baseUrl}/redeem-invitation?code=${code}`;
     navigator.clipboard.writeText(inviteLink);
     showToast('Invitation link copied to clipboard!', 'success');
   };

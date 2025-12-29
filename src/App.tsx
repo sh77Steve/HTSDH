@@ -41,7 +41,7 @@ function AppContent() {
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  if (currentRoute === '/redeem-invitation') {
+  if (currentRoute.endsWith('/redeem-invitation')) {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     return <InvitationRedemptionPage invitationCode={code || undefined} />;
@@ -59,7 +59,7 @@ function AppContent() {
   }
 
   if (!user) {
-    if (currentRoute === '/signup') {
+    if (currentRoute.endsWith('/signup')) {
       return <SignUpPage />;
     }
     return <LoginPage />;
@@ -73,22 +73,22 @@ function AppContent() {
     return <RanchSelector />;
   }
 
-  switch (currentRoute) {
-    case '/search':
-      return <SearchPage />;
-    case '/reports':
-      return <ReportsPage />;
-    case '/settings':
-      return <SettingsPage />;
-    case '/license-management':
-      return <LicenseManagementPage />;
-    case '/license-help':
-      return <LicenseHelpPage />;
-    case '/dashboard':
-    case '/':
-    default:
-      return <AnimalsPage />;
+  if (currentRoute.endsWith('/search')) {
+    return <SearchPage />;
   }
+  if (currentRoute.endsWith('/reports')) {
+    return <ReportsPage />;
+  }
+  if (currentRoute.endsWith('/settings')) {
+    return <SettingsPage />;
+  }
+  if (currentRoute.endsWith('/license-management')) {
+    return <LicenseManagementPage />;
+  }
+  if (currentRoute.endsWith('/license-help')) {
+    return <LicenseHelpPage />;
+  }
+  return <AnimalsPage />;
 }
 
 function App() {

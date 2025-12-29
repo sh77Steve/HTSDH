@@ -184,7 +184,6 @@ export function SettingsPage() {
           sheep_adult_age: (settings as any).sheep_adult_age,
           goat_adult_age: (settings as any).goat_adult_age,
           pig_adult_age: (settings as any).pig_adult_age,
-          print_program: (settings as any).print_program || '',
         })
         .eq('ranch_id', currentRanch.id);
 
@@ -954,28 +953,6 @@ export function SettingsPage() {
                   <p className="text-xs text-gray-500 mt-1">Standard maturity age</p>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-200 pt-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Print/Export Settings</h2>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Print Program Path (optional)
-              </label>
-              <input
-                type="text"
-                value={(settings as any).print_program || ''}
-                onChange={(e) =>
-                  setSettings({ ...settings, print_program: e.target.value } as any)
-                }
-                placeholder="e.g., /usr/bin/lp or C:\Program Files\Adobe\Acrobat\Acrobat.exe"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Path to the program used to print or open exported reports (optional)
-              </p>
             </div>
           </div>
 
