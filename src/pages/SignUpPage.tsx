@@ -45,7 +45,14 @@ export function SignUpPage() {
         window.location.href = '/';
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign up');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign up';
+
+      if (errorMessage.toLowerCase().includes('already registered') ||
+          errorMessage.toLowerCase().includes('already been registered')) {
+        setError('This email is already registered. Please sign in instead or use a different email.');
+      } else {
+        setError(errorMessage);
+      }
       setLoading(false);
     }
   };
