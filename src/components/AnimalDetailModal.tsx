@@ -39,6 +39,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
   const [photos, setPhotos] = useState<AnimalPhoto[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [injectionFeatureEnabled, setInjectionFeatureEnabled] = useState(false);
@@ -352,13 +353,43 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      showToast('Please select a valid image file', 'error');
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+
+    console.log('File upload:', { name: file.name, type: file.type, size: file.size, isImage, isVideo });
+
+    if (!isImage && !isVideo) {
+      showToast(`Please select a valid image or video file. File type: ${file.type}`, 'error');
       return;
     }
 
+    const fileSizeMB = file.size / 1024 / 1024;
+    const practicalMaxMB = 100;
+    const absoluteMaxMB = 1024;
+
+    if (fileSizeMB > absoluteMaxMB) {
+      showToast(`File too large (${fileSizeMB.toFixed(0)}MB). Maximum size is ${absoluteMaxMB}MB.`, 'error');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    if (fileSizeMB > practicalMaxMB) {
+      const message = isVideo
+        ? `This video is ${fileSizeMB.toFixed(0)}MB. Videos over ${practicalMaxMB}MB often fail to upload due to browser and network limitations.\n\nRECOMMENDED: Compress your video to under ${practicalMaxMB}MB using:\n• HandBrake (free desktop app)\n• Online compressors like freeconvert.com\n• Your phone's video compression feature\n\nUploads over ${practicalMaxMB}MB will likely hang or fail. Continue anyway?`
+        : `This file is ${fileSizeMB.toFixed(0)}MB. Files over ${practicalMaxMB}MB may fail to upload.\n\nFor best results, compress or resize the file to under ${practicalMaxMB}MB.\n\nContinue anyway?`;
+
+      if (!confirm(message)) {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+    }
+
     if (isDemoMode) {
-      showToast('Demonstration Mode - Photo was not saved.', 'info');
+      showToast(`Demonstration Mode - ${isVideo ? 'Video' : 'Photo'} was not saved.`, 'info');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -366,24 +397,77 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
     }
 
     setUploading(true);
+    setUploadProgress(0);
+
+    let lastProgressLog = Date.now();
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 95) return prev;
+        const newProgress = prev + 1;
+
+        if (newProgress % 10 === 0) {
+          const elapsed = ((Date.now() - lastProgressLog) / 1000).toFixed(1);
+          console.log(`Upload progress: ${newProgress}% (${elapsed}s since last log)`);
+          lastProgressLog = Date.now();
+        }
+
+        return newProgress;
+      });
+    }, 1000);
 
     try {
       const timestamp = Date.now();
       const fileExtension = file.name.split('.').pop() || 'jpg';
       const fileName = `${animal.ranch_id}/${animal.id}/${timestamp}.${fileExtension}`;
 
-      const { error: uploadError } = await supabase.storage
+      console.log('Uploading to storage:', fileName);
+      console.log('Starting upload at:', new Date().toISOString());
+
+      showToast(`Uploading ${isVideo ? 'video' : 'photo'} (${fileSizeMB.toFixed(0)}MB)... This may take several minutes`, 'info');
+
+      const uploadPromise = supabase.storage
         .from('animal-photos')
         .upload(fileName, file, {
           contentType: file.type,
           upsert: false
         });
 
-      if (uploadError) throw uploadError;
+      const timeoutMs = fileSizeMB > 100 ? 300000 : 180000;
+      const timeoutMinutes = Math.floor(timeoutMs / 60000);
+
+      console.log(`Upload timeout set to ${timeoutMinutes} minutes for ${fileSizeMB.toFixed(0)}MB file`);
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          console.error(`Upload timed out after ${timeoutMinutes} minutes`);
+          reject(new Error(`Upload timeout after ${timeoutMinutes} minutes - file too large or connection too slow`));
+        }, timeoutMs);
+      });
+
+      const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]) as any;
+
+      console.log('Upload completed at:', new Date().toISOString());
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        console.error('Upload error details:', {
+          message: uploadError?.message,
+          statusCode: uploadError?.statusCode,
+          error: uploadError?.error
+        });
+        throw uploadError;
+      }
+
+      clearInterval(progressInterval);
+      setUploadProgress(98);
+
+      console.log('Storage upload successful, getting public URL');
 
       const { data: { publicUrl } } = supabase.storage
         .from('animal-photos')
         .getPublicUrl(fileName);
+
+      console.log('Inserting to database:', { publicUrl, media_type: isVideo ? 'video' : 'image' });
 
       const { error: dbError } = await supabase
         .from('animal_photos')
@@ -392,21 +476,48 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           ranch_id: animal.ranch_id,
           storage_url: publicUrl,
           is_primary: photos.length === 0,
-          file_size_bytes: file.size
+          file_size_bytes: file.size,
+          media_type: isVideo ? 'video' : 'image'
         });
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database insert error:', dbError);
+        throw dbError;
+      }
 
-      showToast('Photo uploaded successfully', 'success');
+      setUploadProgress(100);
+      console.log('Upload complete, reloading photos');
+
+      showToast(`${isVideo ? 'Video' : 'Photo'} uploaded successfully (${fileSizeMB.toFixed(0)}MB)`, 'success');
       await loadPhotos();
+
+      console.log('Photos reloaded successfully. Modal should remain open.');
     } catch (error: any) {
-      console.error('Error uploading photo:', error);
-      showToast(`Failed to upload photo: ${error?.message || 'Unknown error'}`, 'error');
+      clearInterval(progressInterval);
+      console.error('Error uploading media:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        name: error?.name,
+        statusCode: error?.statusCode,
+        stack: error?.stack
+      });
+
+      let errorMsg = error?.message || 'Unknown error';
+      if (errorMsg.includes('timeout')) {
+        errorMsg = `Upload timed out. File is too large (${fileSizeMB.toFixed(0)}MB). Try compressing the video to under 100MB.`;
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        errorMsg = 'Network error. Check your internet connection and try again.';
+      }
+
+      showToast(`Failed to upload ${isVideo ? 'video' : 'photo'}: ${errorMsg}`, 'error');
     } finally {
+      clearInterval(progressInterval);
       setUploading(false);
+      setUploadProgress(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      console.log('Upload process finished. Uploading state cleared.');
     }
   };
 
@@ -446,15 +557,17 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
 
       if (dbError) throw dbError;
 
-      showToast('Photo deleted successfully', 'success');
+      const mediaType = photo.media_type === 'video' ? 'Video' : 'Photo';
+      showToast(`${mediaType} deleted successfully`, 'success');
       await loadPhotos();
 
       if (photos.length <= 1) {
         setShowGallery(false);
       }
     } catch (error: any) {
-      console.error('Error deleting photo:', error);
-      showToast(`Failed to delete photo: ${error?.message || 'Unknown error'}`, 'error');
+      console.error('Error deleting media:', error);
+      const mediaType = photo.media_type === 'video' ? 'video' : 'photo';
+      showToast(`Failed to delete ${mediaType}: ${error?.message || 'Unknown error'}`, 'error');
     }
   };
 
@@ -486,7 +599,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                      title="Upload Photo"
+                      title="Upload Photo or Video"
                       disabled={uploading}
                     >
                       <Upload className="w-5 h-5" />
@@ -494,7 +607,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/*"
                       onChange={handleFileUpload}
                       className="hidden"
                     />
@@ -504,7 +617,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
                   <button
                     onClick={() => setShowGallery(true)}
                     className="relative p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                    title="View Images"
+                    title="View Media"
                   >
                     <ImageIcon className="w-5 h-5" />
                     <span className="absolute -top-1 -right-1 bg-green-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
@@ -562,6 +675,30 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
         </div>
 
         <div className="p-6">
+          {uploading && uploadProgress > 0 && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-900">Uploading...</span>
+                <span className="text-sm font-medium text-blue-900">{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2.5">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+              {uploadProgress >= 95 ? (
+                <p className="text-xs text-blue-700 mt-2">
+                  Finalizing upload... If stuck here for more than 5 minutes, the file is likely too large. Close this window and try compressing the video to under 100MB.
+                </p>
+              ) : (
+                <p className="text-xs text-blue-700 mt-2">
+                  Please wait, large files may take several minutes to upload
+                </p>
+              )}
+            </div>
+          )}
+
           {!isEditing ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>

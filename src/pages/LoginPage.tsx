@@ -9,7 +9,6 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [creatingDemo, setCreatingDemo] = useState(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -39,16 +38,7 @@ export function LoginPage() {
   };
 
   const handleTryDemo = async () => {
-    setError('');
-    setCreatingDemo(true);
-
-    try {
-      await signIn('demo@example.com', 'demo123');
-      window.location.href = '/';
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in to demo account');
-      setCreatingDemo(false);
-    }
+    setError('Demonstration Mode is currently not available.');
   };
 
   return (
@@ -109,7 +99,7 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading || creatingDemo}
+            disabled={loading}
             className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg"
           >
             {loading ? 'Signing in...' : 'Sign In'}
@@ -128,11 +118,11 @@ export function LoginPage() {
 
           <button
             onClick={handleTryDemo}
-            disabled={loading || creatingDemo}
+            disabled={loading}
             className="mt-4 w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
           >
             <Sparkles className="w-5 h-5" />
-            {creatingDemo ? 'Creating Demo...' : 'Try Demo'}
+            Try Demo
           </button>
         </div>
 

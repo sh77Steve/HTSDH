@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, Upload, Image as ImageIcon, Check, AlertCircle } from 'lucide-react';
+import { X, Upload, Image as ImageIcon, Check, AlertCircle, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useRanch } from '../contexts/RanchContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +19,7 @@ interface ImageFile {
   selectedAnimalId: string | null;
   status: 'pending' | 'uploading' | 'success' | 'error';
   error?: string;
+  mediaType: 'image' | 'document';
 }
 
 export function ImageImportModal({ onClose, onComplete, animals }: ImageImportModalProps) {
@@ -31,11 +32,13 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const imageFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const documentFileTypes = ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'];
 
     const newImageFiles: ImageFile[] = files
-      .filter(file => imageFileTypes.includes(file.type))
+      .filter(file => imageFileTypes.includes(file.type) || documentFileTypes.includes(file.type))
       .map(file => {
-        const preview = URL.createObjectURL(file);
+        const isDocument = documentFileTypes.includes(file.type);
+        const preview = isDocument ? '' : URL.createObjectURL(file);
         const matchedAnimal = findMatchingAnimal(file.name);
 
         return {
@@ -43,6 +46,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
           preview,
           selectedAnimalId: matchedAnimal?.id || null,
           status: 'pending' as const,
+          mediaType: isDocument ? 'document' as const : 'image' as const,
         };
       });
 
@@ -50,7 +54,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
   };
 
   const findMatchingAnimal = (filename: string): Animal | null => {
-    const cleanName = filename.toLowerCase().replace(/\.(jpg|jpeg|png|webp)$/i, '');
+    const cleanName = filename.toLowerCase().replace(/\.(jpg|jpeg|png|webp|ppt|pptx)$/i, '');
 
     return animals.find(animal => {
       const tagNumber = animal.tag_number?.toLowerCase();
@@ -73,7 +77,9 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
 
   const handleRemove = (index: number) => {
     const img = imageFiles[index];
-    URL.revokeObjectURL(img.preview);
+    if (img.preview) {
+      URL.revokeObjectURL(img.preview);
+    }
     setImageFiles(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -123,9 +129,10 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
             storage_url: publicUrl,
             taken_by_user_id: user.id,
             is_primary: existingPhotosCount === 0,
-            description: `Imported photo for ${animal?.name || animal?.tag_number || 'animal'}`,
+            description: `Imported ${img.mediaType === 'document' ? 'document' : 'photo'} for ${animal?.name || animal?.tag_number || 'animal'}`,
             is_synced: true,
-            file_size_bytes: img.file.size
+            file_size_bytes: img.file.size,
+            media_type: img.mediaType
           });
 
         if (dbError) throw dbError;
@@ -171,9 +178,9 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
           <div className="flex items-center gap-3">
             <ImageIcon className="w-6 h-6 text-green-600" />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Import Animal Photos</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Import Animal Media</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Upload photos and link them to animals
+                Upload photos, documents and link them to animals
               </p>
             </div>
           </div>
@@ -192,7 +199,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
+                accept="image/jpeg,image/jpg,image/png,image/webp,.ppt,.pptx"
                 multiple
                 onChange={handleFileSelect}
                 className="hidden"
@@ -203,9 +210,9 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
               >
                 <Upload className="w-16 h-16 text-gray-400" />
                 <div>
-                  <p className="text-lg font-medium text-gray-900">Select Photos</p>
+                  <p className="text-lg font-medium text-gray-900">Select Files</p>
                   <p className="text-sm text-gray-600 mt-1">
-                    Choose one or more images (JPEG, PNG, WebP)
+                    Choose images (JPEG, PNG, WebP) or documents (PPT, PPTX)
                   </p>
                 </div>
               </button>
@@ -229,7 +236,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
             <>
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  {imageFiles.length} photo{imageFiles.length !== 1 ? 's' : ''} selected
+                  {imageFiles.length} file{imageFiles.length !== 1 ? 's' : ''} selected
                   {successCount > 0 && ` • ${successCount} uploaded`}
                   {errorCount > 0 && ` • ${errorCount} failed`}
                 </div>
@@ -237,7 +244,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    accept="image/jpeg,image/jpg,image/png,image/webp,.ppt,.pptx"
                     multiple
                     onChange={handleFileSelect}
                     className="hidden"
@@ -264,11 +271,17 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                     }`}
                   >
                     <div className="relative aspect-video bg-gray-100">
-                      <img
-                        src={img.preview}
-                        alt={img.file.name}
-                        className="w-full h-full object-cover"
-                      />
+                      {img.mediaType === 'document' ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <FileText className="w-20 h-20 text-gray-400" />
+                        </div>
+                      ) : (
+                        <img
+                          src={img.preview}
+                          alt={img.file.name}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                       {img.status === 'success' && (
                         <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
                           <div className="bg-green-500 rounded-full p-2">
@@ -335,7 +348,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                   className="inline-flex items-center px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {importing ? 'Importing...' : `Import ${pendingCount} Photo${pendingCount !== 1 ? 's' : ''}`}
+                  {importing ? 'Importing...' : `Import ${pendingCount} File${pendingCount !== 1 ? 's' : ''}`}
                 </button>
               </div>
             </>

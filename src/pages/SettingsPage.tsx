@@ -48,6 +48,7 @@ export function SettingsPage() {
     medicalHistoryAdded: number;
     medicalHistorySkipped: number;
     customFieldsAdded: number;
+    photosRestored: number;
     errors: string[];
   } | null>(null);
   const [showRestoreSummary, setShowRestoreSummary] = useState(false);
@@ -1642,9 +1643,13 @@ export function SettingsPage() {
                   <p className="text-sm text-gray-600">Medical Records Skipped</p>
                   <p className="text-2xl font-bold text-blue-700">{restoreSummary.medicalHistorySkipped}</p>
                 </div>
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg col-span-2">
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-gray-600">Custom Fields Added</p>
                   <p className="text-2xl font-bold text-green-700">{restoreSummary.customFieldsAdded}</p>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Photos Restored</p>
+                  <p className="text-2xl font-bold text-green-700">{restoreSummary.photosRestored}</p>
                 </div>
               </div>
 

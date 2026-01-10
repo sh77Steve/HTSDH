@@ -82,7 +82,17 @@ export function AnimalsPage() {
       const { data, error } = await query;
 
       if (error) throw error;
-      setAnimals(data || []);
+
+      const sortedData = (data || []).sort((a, b) => {
+        if (a.animal_type === 'Other' && b.animal_type !== 'Other') return -1;
+        if (a.animal_type !== 'Other' && b.animal_type === 'Other') return 1;
+
+        const tagA = a.tag_number || '';
+        const tagB = b.tag_number || '';
+        return tagA.localeCompare(tagB, undefined, { numeric: true });
+      });
+
+      setAnimals(sortedData);
     } catch (error) {
       console.error('Error fetching animals:', error);
     } finally {

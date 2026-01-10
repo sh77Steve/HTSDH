@@ -7,6 +7,7 @@ interface RestoreSummary {
   medicalHistoryAdded: number;
   medicalHistorySkipped: number;
   customFieldsAdded: number;
+  photosRestored: number;
   errors: string[];
 }
 
@@ -17,14 +18,16 @@ interface ParsedAnimal {
   animal_type: string;
   sex: string;
   birth_date: string;
-  birth_weight: string;
+  weaning_date: string;
   status: string;
-  date_sold: string;
+  exit_date: string;
   sale_price: string;
+  weight_lbs: string;
   mother_tag: string;
   father_tag: string;
-  purchase_date: string;
-  purchase_price: string;
+  source: string;
+  tag_color: string;
+  description: string;
   notes: string;
   medical_history: string;
   photo_count: string;
@@ -46,6 +49,7 @@ export async function restoreComprehensiveBackup(
     medicalHistoryAdded: 0,
     medicalHistorySkipped: 0,
     customFieldsAdded: 0,
+    photosRestored: 0,
     errors: [],
   };
 
@@ -73,10 +77,10 @@ export async function restoreComprehensiveBackup(
 
     const { data: existingCustomFields } = await supabase
       .from('custom_field_definitions')
-      .select('id, name')
+      .select('id, field_name')
       .eq('ranch_id', ranchId);
 
-    const customFieldMap = new Map(existingCustomFields?.map(f => [f.name, f.id]) || []);
+    const customFieldMap = new Map(existingCustomFields?.map(f => [f.field_name, f.id]) || []);
 
     for (const parsedAnimal of parsedAnimals) {
       try {
@@ -126,17 +130,19 @@ export async function restoreComprehensiveBackup(
           ranch_id: ranchId,
           tag_number: parsedAnimal.tag_number,
           name: parsedAnimal.name || null,
-          animal_type: parsedAnimal.animal_type || 'BOVINE',
+          animal_type: parsedAnimal.animal_type || 'Cattle',
           sex: parsedAnimal.sex || null,
           birth_date: parsedAnimal.birth_date || null,
-          birth_weight: parsedAnimal.birth_weight ? parseFloat(parsedAnimal.birth_weight) : null,
+          weaning_date: parsedAnimal.weaning_date || null,
           status: parsedAnimal.status || 'PRESENT',
-          date_sold: parsedAnimal.date_sold || null,
+          exit_date: parsedAnimal.exit_date || null,
           sale_price: parsedAnimal.sale_price ? parseFloat(parsedAnimal.sale_price) : null,
+          weight_lbs: parsedAnimal.weight_lbs ? parseFloat(parsedAnimal.weight_lbs) : null,
           mother_id: motherId || null,
           father_id: fatherId || null,
-          purchase_date: parsedAnimal.purchase_date || null,
-          purchase_price: parsedAnimal.purchase_price ? parseFloat(parsedAnimal.purchase_price) : null,
+          source: parsedAnimal.source || 'BORN',
+          tag_color: parsedAnimal.tag_color || null,
+          description: parsedAnimal.description || null,
           notes: parsedAnimal.notes || null,
         };
 
@@ -174,7 +180,7 @@ export async function restoreComprehensiveBackup(
               .from('custom_field_definitions')
               .insert({
                 ranch_id: ranchId,
-                name: fieldName,
+                field_name: fieldName,
                 field_type: 'text',
               })
               .select()
@@ -202,6 +208,9 @@ export async function restoreComprehensiveBackup(
         summary.errors.push(`Error processing animal ${parsedAnimal.tag_number}: ${errorMessage}`);
       }
     }
+
+    const photosRestored = await restorePhotos(zipContent, newAnimalIdMap, ranchId);
+    summary.photosRestored = photosRestored;
 
     return summary;
   } catch (error) {
@@ -296,14 +305,16 @@ function parseCSV(csvContent: string): ParsedAnimal[] {
     'Type',
     'Sex',
     'Birth Date',
-    'Birth Weight',
+    'Weaning Date',
     'Status',
-    'Date Sold',
+    'Exit Date',
     'Sale Price',
+    'Weight (lbs)',
     'Mother Tag',
     'Father Tag',
-    'Purchase Date',
-    'Purchase Price',
+    'Source',
+    'Tag Color',
+    'Description',
     'Notes',
     'Medical History',
     'Photo Count',
@@ -328,20 +339,22 @@ function parseCSV(csvContent: string): ParsedAnimal[] {
       id: values[0] || '',
       tag_number: values[1] || '',
       name: values[2] || '',
-      animal_type: values[3] || 'BOVINE',
+      animal_type: values[3] || 'Cattle',
       sex: values[4] || '',
       birth_date: values[5] || '',
-      birth_weight: values[6] || '',
+      weaning_date: values[6] || '',
       status: values[7] || 'PRESENT',
-      date_sold: values[8] || '',
+      exit_date: values[8] || '',
       sale_price: values[9] || '',
-      mother_tag: values[10] || '',
-      father_tag: values[11] || '',
-      purchase_date: values[12] || '',
-      purchase_price: values[13] || '',
-      notes: values[14] || '',
-      medical_history: values[15] || '',
-      photo_count: values[16] || '0',
+      weight_lbs: values[10] || '',
+      mother_tag: values[11] || '',
+      father_tag: values[12] || '',
+      source: values[13] || 'BORN',
+      tag_color: values[14] || '',
+      description: values[15] || '',
+      notes: values[16] || '',
+      medical_history: values[17] || '',
+      photo_count: values[18] || '0',
       customFields,
     });
   }
@@ -374,4 +387,93 @@ function parseCSVLine(line: string): string[] {
 
   values.push(current);
   return values;
+}
+
+async function restorePhotos(
+  zipContent: JSZip,
+  animalIdMap: Map<string, string>,
+  ranchId: string
+): Promise<number> {
+  let photosRestored = 0;
+
+  const photoFiles: Array<{ name: string; file: JSZip.JSZipObject }> = [];
+  zipContent.forEach((relativePath, file) => {
+    if (!file.dir && relativePath.startsWith('photos/') && relativePath.endsWith('.jpg')) {
+      const filename = relativePath.replace('photos/', '');
+      photoFiles.push({ name: filename, file });
+    }
+  });
+
+  console.log(`Found ${photoFiles.length} photos in backup`);
+  console.log('Animal ID map size:', animalIdMap.size);
+
+  for (const { name, file } of photoFiles) {
+    try {
+      const oldAnimalId = name.split('_')[0];
+      const newAnimalId = animalIdMap.get(oldAnimalId);
+
+      console.log(`Processing photo ${name}, old ID: ${oldAnimalId}, new ID: ${newAnimalId}`);
+
+      if (!newAnimalId) {
+        console.log(`Skipping photo ${name}: animal not restored`);
+        continue;
+      }
+
+      const rawBlob = await file.async('blob');
+      const photoBlob = new Blob([rawBlob], { type: 'image/jpeg' });
+
+      const timestamp = Date.now() + photosRestored;
+      const storagePath = `${ranchId}/${newAnimalId}/${timestamp}.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('animal-photos')
+        .upload(storagePath, photoBlob, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error(`Failed to upload photo ${name}:`, uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('animal-photos')
+        .getPublicUrl(storagePath);
+
+      const { error: dbError } = await supabase
+        .from('animal_photos')
+        .insert({
+          animal_id: newAnimalId,
+          ranch_id: ranchId,
+          storage_url: urlData.publicUrl,
+          file_size_bytes: photoBlob.size,
+        });
+
+      if (dbError) {
+        console.error(`Failed to create photo record for ${name}:`, dbError);
+        continue;
+      }
+
+      console.log(`Successfully restored photo ${name}`);
+      photosRestored++;
+    } catch (error) {
+      console.error(`Error restoring photo ${name}:`, error);
+    }
+  }
+
+  if (photosRestored > 0) {
+    for (const [oldId, newId] of animalIdMap.entries()) {
+      const animalPhotoCount = photoFiles.filter(p => p.name.startsWith(oldId + '_')).length;
+      if (animalPhotoCount > 0) {
+        await supabase
+          .from('animals')
+          .update({ photo_count: animalPhotoCount })
+          .eq('id', newId);
+      }
+    }
+  }
+
+  console.log(`Total photos restored: ${photosRestored}`);
+  return photosRestored;
 }
