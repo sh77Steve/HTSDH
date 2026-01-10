@@ -58,6 +58,7 @@ export function AnimalsPage() {
         .from('animals')
         .select('*')
         .eq('ranch_id', currentRanch.id)
+        .neq('animal_type', 'Other')
         .order('tag_number', { ascending: true, nullsFirst: true });
 
       if (statusFilter !== 'ALL') {
@@ -83,16 +84,7 @@ export function AnimalsPage() {
 
       if (error) throw error;
 
-      const sortedData = (data || []).sort((a, b) => {
-        if (a.animal_type === 'Other' && b.animal_type !== 'Other') return -1;
-        if (a.animal_type !== 'Other' && b.animal_type === 'Other') return 1;
-
-        const tagA = a.tag_number || '';
-        const tagB = b.tag_number || '';
-        return tagA.localeCompare(tagB, undefined, { numeric: true });
-      });
-
-      setAnimals(sortedData);
+      setAnimals(data || []);
     } catch (error) {
       console.error('Error fetching animals:', error);
     } finally {

@@ -8,7 +8,7 @@ import { BackupWarningModal } from './BackupWarningModal';
 
 interface LayoutProps {
   children: ReactNode;
-  currentPage: 'animals' | 'search' | 'reports' | 'settings' | 'license';
+  currentPage: 'animals' | 'search' | 'reports' | 'settings' | 'ranch';
 }
 
 export function Layout({ children, currentPage }: LayoutProps) {
@@ -75,7 +75,7 @@ export function Layout({ children, currentPage }: LayoutProps) {
     { name: 'Animals', icon: Home, page: 'animals', href: '/dashboard' },
     { name: 'Search', icon: Search, page: 'search', href: '/search' },
     { name: 'Reports', icon: FileText, page: 'reports', href: '/reports' },
-    { name: 'License / Help', icon: HelpCircle, page: 'license', href: '/license-help' },
+    { name: 'Ranch', icon: HelpCircle, page: 'ranch', href: '/license-help' },
     { name: 'Settings', icon: Settings, page: 'settings', href: '/settings' },
   ];
 

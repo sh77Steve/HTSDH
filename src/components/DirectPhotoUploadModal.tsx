@@ -1,31 +1,28 @@
 import { useState, useRef } from 'react';
-import { X, Upload, Image as ImageIcon, Check, AlertCircle } from 'lucide-react';
+import { X, Upload, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useRanch } from '../contexts/RanchContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { Database } from '../lib/database.types';
 
-type Animal = Database['public']['Tables']['animals']['Row'];
-
-interface ImageImportModalProps {
+interface DirectPhotoUploadModalProps {
+  animalId: string;
+  animalName: string;
   onClose: () => void;
   onComplete: () => void;
-  animals: Animal[];
 }
 
 interface ImageFile {
   file: File;
   preview: string;
-  selectedAnimalId: string | null;
   status: 'pending' | 'uploading' | 'success' | 'error';
   error?: string;
 }
 
-export function ImageImportModal({ onClose, onComplete, animals }: ImageImportModalProps) {
+export function DirectPhotoUploadModal({ animalId, animalName, onClose, onComplete }: DirectPhotoUploadModalProps) {
   const { currentRanch } = useRanch();
   const { user } = useAuth();
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
-  const [importing, setImporting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,41 +31,13 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
 
     const newImageFiles: ImageFile[] = files
       .filter(file => imageFileTypes.includes(file.type))
-      .map(file => {
-        const preview = URL.createObjectURL(file);
-        const matchedAnimal = findMatchingAnimal(file.name);
-
-        return {
-          file,
-          preview,
-          selectedAnimalId: matchedAnimal?.id || null,
-          status: 'pending' as const,
-        };
-      });
+      .map(file => ({
+        file,
+        preview: URL.createObjectURL(file),
+        status: 'pending' as const,
+      }));
 
     setImageFiles(prev => [...prev, ...newImageFiles]);
-  };
-
-  const findMatchingAnimal = (filename: string): Animal | null => {
-    const cleanName = filename.toLowerCase().replace(/\.(jpg|jpeg|png|webp)$/i, '');
-
-    return animals.find(animal => {
-      const tagNumber = animal.tag_number?.toLowerCase();
-      const legacyUid = animal.legacy_uid?.toLowerCase();
-      const name = animal.name?.toLowerCase();
-
-      if (tagNumber && cleanName.includes(tagNumber)) return true;
-      if (legacyUid && cleanName.includes(legacyUid)) return true;
-      if (name && cleanName.includes(name)) return true;
-
-      return false;
-    }) || null;
-  };
-
-  const handleAnimalSelect = (index: number, animalId: string) => {
-    setImageFiles(prev => prev.map((img, i) =>
-      i === index ? { ...img, selectedAnimalId: animalId } : img
-    ));
   };
 
   const handleRemove = (index: number) => {
@@ -77,18 +46,20 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
     setImageFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleImport = async () => {
+  const handleUpload = async () => {
     if (!currentRanch || !user) return;
 
-    const filesToImport = imageFiles.filter(img => img.selectedAnimalId && img.status === 'pending');
-    if (filesToImport.length === 0) return;
+    const filesToUpload = imageFiles.filter(img => img.status === 'pending');
+    if (filesToUpload.length === 0) return;
 
-    setImporting(true);
+    setUploading(true);
+
+    const existingPhotosCount = await getAnimalPhotoCount();
 
     for (let i = 0; i < imageFiles.length; i++) {
       const img = imageFiles[i];
 
-      if (!img.selectedAnimalId || img.status !== 'pending') continue;
+      if (img.status !== 'pending') continue;
 
       setImageFiles(prev => prev.map((item, idx) =>
         idx === i ? { ...item, status: 'uploading' } : item
@@ -112,18 +83,15 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
           .from('animal-photos')
           .getPublicUrl(filePath);
 
-        const animal = animals.find(a => a.id === img.selectedAnimalId);
-        const existingPhotosCount = await getAnimalPhotoCount(img.selectedAnimalId);
-
         const { error: dbError } = await supabase
           .from('animal_photos')
           .insert({
-            animal_id: img.selectedAnimalId,
+            animal_id: animalId,
             ranch_id: currentRanch.id,
             storage_url: publicUrl,
             taken_by_user_id: user.id,
-            is_primary: existingPhotosCount === 0,
-            caption: `Imported photo for ${animal?.name || animal?.tag_number || 'animal'}`,
+            is_primary: existingPhotosCount === 0 && i === 0,
+            caption: `Photo for ${animalName}`,
             is_synced: true,
             file_size_bytes: img.file.size
           });
@@ -134,24 +102,24 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
           idx === i ? { ...item, status: 'success' } : item
         ));
       } catch (error: any) {
-        console.error('Error importing image:', error);
+        console.error('Error uploading image:', error);
         setImageFiles(prev => prev.map((item, idx) =>
           idx === i ? { ...item, status: 'error', error: error.message } : item
         ));
       }
     }
 
-    setImporting(false);
+    setUploading(false);
 
     const successCount = imageFiles.filter(img => img.status === 'success').length;
     if (successCount > 0) {
       setTimeout(() => {
         onComplete();
-      }, 2000);
+      }, 1000);
     }
   };
 
-  const getAnimalPhotoCount = async (animalId: string): Promise<number> => {
+  const getAnimalPhotoCount = async (): Promise<number> => {
     const { count } = await supabase
       .from('animal_photos')
       .select('*', { count: 'exact', head: true })
@@ -160,7 +128,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
     return count || 0;
   };
 
-  const pendingCount = imageFiles.filter(img => img.status === 'pending' && img.selectedAnimalId).length;
+  const pendingCount = imageFiles.filter(img => img.status === 'pending').length;
   const successCount = imageFiles.filter(img => img.status === 'success').length;
   const errorCount = imageFiles.filter(img => img.status === 'error').length;
 
@@ -168,19 +136,16 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ImageIcon className="w-6 h-6 text-green-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Import Animal Photos</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Upload photos and link them to animals
-              </p>
-            </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Upload Photos</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              For: <span className="font-medium">{animalName}</span>
+            </p>
           </div>
           <button
             onClick={onClose}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-            disabled={importing}
+            disabled={uploading}
           >
             <X className="w-5 h-5" />
           </button>
@@ -214,13 +179,8 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="text-sm text-blue-900">
-                    <p className="font-medium mb-2">Tips for importing photos:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Name your files with the animal's tag number or name for auto-matching</li>
-                      <li>Example: "30Red.jpg" will auto-match to animal with tag "30Red"</li>
-                      <li>You can manually select the animal for each photo after upload</li>
-                      <li>The first photo imported for an animal becomes its primary photo</li>
-                    </ul>
+                    <p className="font-medium mb-1">Tip:</p>
+                    <p>You can select multiple photos at once. All selected photos will be uploaded to this item.</p>
                   </div>
                 </div>
               </div>
@@ -244,7 +204,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={importing}
+                    disabled={uploading}
                     className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-50"
                   >
                     Add More
@@ -252,7 +212,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
                 {imageFiles.map((img, index) => (
                   <div
                     key={index}
@@ -263,7 +223,7 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                       'border-gray-200'
                     }`}
                   >
-                    <div className="relative aspect-video bg-gray-100">
+                    <div className="relative aspect-square bg-gray-100">
                       <img
                         src={img.preview}
                         alt={img.file.name}
@@ -278,45 +238,27 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                       )}
                       {img.status === 'uploading' && (
                         <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                          <div className="bg-white rounded-lg px-4 py-2 text-sm font-medium">
+                          <div className="bg-white rounded-lg px-3 py-1.5 text-xs font-medium">
                             Uploading...
                           </div>
                         </div>
                       )}
-                    </div>
-                    <div className="p-3">
-                      <p className="text-sm font-medium text-gray-900 truncate mb-2">
-                        {img.file.name}
-                      </p>
-                      {img.status === 'error' && (
-                        <p className="text-xs text-red-600 mb-2">{img.error}</p>
-                      )}
-                      {img.status !== 'success' && (
-                        <div className="flex gap-2">
-                          <select
-                            value={img.selectedAnimalId || ''}
-                            onChange={(e) => handleAnimalSelect(index, e.target.value)}
-                            disabled={importing}
-                            className="flex-1 text-sm px-2 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:opacity-50"
-                          >
-                            <option value="">Select animal...</option>
-                            {animals.map(animal => (
-                              <option key={animal.id} value={animal.id}>
-                                {animal.tag_number || animal.name || animal.legacy_uid || `Animal ${animal.id.slice(0, 8)}`}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleRemove(index)}
-                            disabled={importing}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
-                            title="Remove"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
+                      {img.status === 'pending' && (
+                        <button
+                          onClick={() => handleRemove(index)}
+                          disabled={uploading}
+                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 transition disabled:opacity-50"
+                          title="Remove"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       )}
                     </div>
+                    {img.status === 'error' && (
+                      <div className="p-2">
+                        <p className="text-xs text-red-600 truncate">{img.error}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -325,17 +267,17 @@ export function ImageImportModal({ onClose, onComplete, animals }: ImageImportMo
                 <button
                   onClick={onClose}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                  disabled={importing}
+                  disabled={uploading}
                 >
                   {successCount > 0 ? 'Done' : 'Cancel'}
                 </button>
                 <button
-                  onClick={handleImport}
-                  disabled={pendingCount === 0 || importing}
+                  onClick={handleUpload}
+                  disabled={pendingCount === 0 || uploading}
                   className="inline-flex items-center px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {importing ? 'Importing...' : `Import ${pendingCount} Photo${pendingCount !== 1 ? 's' : ''}`}
+                  {uploading ? 'Uploading...' : `Upload ${pendingCount} Photo${pendingCount !== 1 ? 's' : ''}`}
                 </button>
               </div>
             </>

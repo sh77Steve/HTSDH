@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Trash, Play, FileText, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Trash } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import type { Database } from '../lib/database.types';
 
@@ -46,15 +46,11 @@ export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false, is
 
   const handleDeleteCurrent = () => {
     if (isDemoMode) {
-      const mediaLabel = currentPhoto.media_type === 'video' ? 'Video' :
-                         currentPhoto.media_type === 'document' ? 'Document' : 'Photo';
-      showToast(`Demonstration Mode - ${mediaLabel} was not deleted.`, 'info');
+      showToast('Demonstration Mode - Photo was not deleted.', 'info');
       return;
     }
 
-    const mediaType = currentPhoto.media_type === 'video' ? 'video' :
-                      currentPhoto.media_type === 'document' ? 'document' : 'photo';
-    if (confirm(`Are you sure you want to delete this ${mediaType}?`)) {
+    if (confirm('Are you sure you want to delete this photo?')) {
       onDelete(currentPhoto);
       if (currentIndex >= photos.length - 1 && currentIndex > 0) {
         setCurrentIndex(currentIndex - 1);
@@ -76,10 +72,7 @@ export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false, is
         <button
           onClick={handleDeleteCurrent}
           className="absolute top-4 left-4 p-2 text-white hover:bg-red-600 rounded-lg transition z-10"
-          title={`Delete ${
-            currentPhoto.media_type === 'video' ? 'Video' :
-            currentPhoto.media_type === 'document' ? 'Document' : 'Photo'
-          }`}
+          title="Delete Photo"
         >
           <Trash className="w-6 h-6" />
         </button>
@@ -110,66 +103,23 @@ export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false, is
       )}
 
       <div className="max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center p-4">
-        {currentPhoto.media_type === 'video' ? (
-          <video
-            src={currentPhoto.storage_url}
-            controls
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onError={(e) => {
-              console.error('Failed to load video:', currentPhoto.storage_url);
-              e.currentTarget.style.display = 'none';
-              const errorDiv = document.createElement('div');
-              errorDiv.className = 'text-white text-center bg-red-600 bg-opacity-80 p-8 rounded-lg';
-              errorDiv.innerHTML = `
-                <p class="text-lg font-semibold mb-2">Failed to load video</p>
-                <p class="text-sm opacity-90">The video could not be displayed.</p>
-                <p class="text-xs opacity-75 mt-2">URL: ${currentPhoto.storage_url}</p>
-              `;
-              e.currentTarget.parentElement?.appendChild(errorDiv);
-            }}
-          />
-        ) : currentPhoto.media_type === 'document' ? (
-          <div className="bg-white rounded-xl p-12 text-center max-w-md">
-            <FileText className="w-24 h-24 text-gray-400 mx-auto mb-6" />
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Document File</h3>
-            <p className="text-gray-600 mb-1">
-              {currentPhoto.storage_url.split('/').pop()?.split('?')[0] || 'Document'}
-            </p>
-            {currentPhoto.file_size && (
-              <p className="text-sm text-gray-500 mb-6">
-                {(currentPhoto.file_size / (1024 * 1024)).toFixed(2)} MB
-              </p>
-            )}
-            <a
-              href={currentPhoto.storage_url}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-            >
-              <Download className="w-5 h-5" />
-              Download File
-            </a>
-          </div>
-        ) : (
-          <img
-            src={currentPhoto.storage_url}
-            alt="Animal photo"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onError={(e) => {
-              console.error('Failed to load image:', currentPhoto.storage_url);
-              e.currentTarget.style.display = 'none';
-              const errorDiv = document.createElement('div');
-              errorDiv.className = 'text-white text-center bg-red-600 bg-opacity-80 p-8 rounded-lg';
-              errorDiv.innerHTML = `
-                <p class="text-lg font-semibold mb-2">Failed to load image</p>
-                <p class="text-sm opacity-90">The photo could not be displayed.</p>
-                <p class="text-xs opacity-75 mt-2">URL: ${currentPhoto.storage_url}</p>
-              `;
-              e.currentTarget.parentElement?.appendChild(errorDiv);
-            }}
-          />
-        )}
+        <img
+          src={currentPhoto.storage_url}
+          alt="Animal photo"
+          className="max-w-full max-h-full object-contain rounded-lg"
+          onError={(e) => {
+            console.error('Failed to load image:', currentPhoto.storage_url);
+            e.currentTarget.style.display = 'none';
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'text-white text-center bg-red-600 bg-opacity-80 p-8 rounded-lg';
+            errorDiv.innerHTML = `
+              <p class="text-lg font-semibold mb-2">Failed to load image</p>
+              <p class="text-sm opacity-90">The photo could not be displayed.</p>
+              <p class="text-xs opacity-75 mt-2">URL: ${currentPhoto.storage_url}</p>
+            `;
+            e.currentTarget.parentElement?.appendChild(errorDiv);
+          }}
+        />
       </div>
 
       {photos.length > 1 && (
@@ -184,27 +134,11 @@ export function PhotoGallery({ photos, onClose, onDelete, isReadOnly = false, is
                   : 'border-white border-opacity-50 hover:border-opacity-100'
               }`}
             >
-              {photo.media_type === 'video' ? (
-                <>
-                  <video
-                    src={photo.storage_url}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-                    <Play className="w-6 h-6 text-white" fill="white" />
-                  </div>
-                </>
-              ) : photo.media_type === 'document' ? (
-                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                  <FileText className="w-8 h-8 text-gray-600" />
-                </div>
-              ) : (
-                <img
-                  src={photo.storage_url}
-                  alt={`Thumbnail ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
-              )}
+              <img
+                src={photo.storage_url}
+                alt={`Thumbnail ${index + 1}`}
+                className="w-full h-full object-cover"
+              />
             </button>
           ))}
         </div>

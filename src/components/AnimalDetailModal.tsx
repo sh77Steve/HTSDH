@@ -253,7 +253,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
         .from('animal_photos')
         .select('*')
         .eq('animal_id', animal.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
       setPhotos(data || []);

@@ -55,7 +55,8 @@ export function ReportsPage() {
         supabase
           .from('animals')
           .select('*')
-          .eq('ranch_id', currentRanch.id),
+          .eq('ranch_id', currentRanch.id)
+          .neq('animal_type', 'Other'),
         supabase
           .from('medical_history')
           .select('*')

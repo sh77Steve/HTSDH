@@ -12,6 +12,8 @@ import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import LicenseManagementPage from './pages/LicenseManagementPage';
 import { LicenseHelpPage } from './pages/LicenseHelpPage';
+import { MoviesPage } from './pages/MoviesPage';
+import { CheckFencesPage } from './pages/CheckFencesPage';
 import { TermsModal } from './components/TermsModal';
 
 function AppContent() {
@@ -87,6 +89,12 @@ function AppContent() {
   }
   if (currentRoute.endsWith('/license-help')) {
     return <LicenseHelpPage />;
+  }
+  if (currentRoute.endsWith('/movies')) {
+    return <MoviesPage />;
+  }
+  if (currentRoute.endsWith('/check-fences')) {
+    return <CheckFencesPage />;
   }
   return <AnimalsPage />;
 }

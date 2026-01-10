@@ -35,7 +35,8 @@ export function SearchPage() {
       let query = supabase
         .from('animals')
         .select('*')
-        .eq('ranch_id', currentRanch.id);
+        .eq('ranch_id', currentRanch.id)
+        .neq('animal_type', 'Other');
 
       if (statusFilter !== 'ALL') {
         query = query.eq('status', statusFilter);
