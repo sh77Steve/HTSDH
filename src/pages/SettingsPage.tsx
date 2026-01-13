@@ -27,7 +27,7 @@ interface Drug {
 
 export function SettingsPage() {
   const { currentRanch, currentUserRole, refreshRanchData, refreshRanches, selectRanch } = useRanch();
-  const { user } = useAuth();
+  const { user, changePassword } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<RanchSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +42,9 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [exportingBackup, setExportingBackup] = useState(false);
   const [restoringBackup, setRestoringBackup] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
   const [restoreSummary, setRestoreSummary] = useState<{
     animalsAdded: number;
     animalsSkipped: number;
@@ -254,6 +257,39 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save contact information' });
     } finally {
       setSavingContactInfo(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword) {
+      setMessage({ type: 'error', text: 'Password cannot be empty' });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: 'error', text: 'Passwords do not match' });
+      return;
+    }
+
+    setChangingPassword(true);
+    setMessage(null);
+
+    try {
+      await changePassword(newPassword);
+      setMessage({ type: 'success', text: 'Password changed successfully' });
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to change password' });
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -800,6 +836,51 @@ export function SettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Change Password</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Update your account password
+            </p>
+
+            <div className="space-y-4 max-w-md">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              <button
+                onClick={handleChangePassword}
+                disabled={changingPassword || !newPassword || !confirmPassword}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {changingPassword ? 'Changing Password...' : 'Change Password'}
+              </button>
             </div>
           </div>
         </div>

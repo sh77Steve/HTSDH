@@ -120,19 +120,26 @@ export function TipsModal({ isOpen, onClose }: TipsModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">Tips & Tricks</h2>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200 flex-shrink-0">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900">Tips & Tricks</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors -mr-2"
+            aria-label="Close"
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6 md:w-7 md:h-7" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-gray-600">Loading...</div>
@@ -146,10 +153,10 @@ export function TipsModal({ isOpen, onClose }: TipsModalProps) {
           )}
         </div>
 
-        <div className="flex justify-end p-6 border-t border-gray-200">
+        <div className="flex justify-center md:justify-end p-4 md:p-6 border-t border-gray-200 flex-shrink-0 bg-white">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="w-full md:w-auto px-8 py-3 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-md"
           >
             Close
           </button>
