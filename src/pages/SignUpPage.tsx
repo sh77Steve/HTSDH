@@ -73,7 +73,7 @@ export function SignUpPage() {
           Get started with AmadorHerdInfo
         </p>
         <p className="text-center text-gray-500 text-xs mb-6">
-          by Amador Software
+          by Steve Howard
         </p>
 
         {invitationCode && (

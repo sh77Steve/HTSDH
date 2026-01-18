@@ -8,6 +8,10 @@ interface RestoreSummary {
   medicalHistorySkipped: number;
   customFieldsAdded: number;
   photosRestored: number;
+  drugsAdded: number;
+  drugsSkipped: number;
+  fencesAdded: number;
+  fencesSkipped: number;
   errors: string[];
 }
 
@@ -50,6 +54,10 @@ export async function restoreComprehensiveBackup(
     medicalHistorySkipped: 0,
     customFieldsAdded: 0,
     photosRestored: 0,
+    drugsAdded: 0,
+    drugsSkipped: 0,
+    fencesAdded: 0,
+    fencesSkipped: 0,
     errors: [],
   };
 
@@ -211,6 +219,20 @@ export async function restoreComprehensiveBackup(
 
     const photosRestored = await restorePhotos(zipContent, newAnimalIdMap, ranchId);
     summary.photosRestored = photosRestored;
+
+    const drugsSummary = await restoreDrugs(zipContent, ranchId);
+    summary.drugsAdded = drugsSummary.added;
+    summary.drugsSkipped = drugsSummary.skipped;
+    if (drugsSummary.errors.length > 0) {
+      summary.errors.push(...drugsSummary.errors);
+    }
+
+    const fencesSummary = await restoreFences(zipContent, ranchId);
+    summary.fencesAdded = fencesSummary.added;
+    summary.fencesSkipped = fencesSummary.skipped;
+    if (fencesSummary.errors.length > 0) {
+      summary.errors.push(...fencesSummary.errors);
+    }
 
     return summary;
   } catch (error) {
@@ -476,4 +498,147 @@ async function restorePhotos(
 
   console.log(`Total photos restored: ${photosRestored}`);
   return photosRestored;
+}
+
+async function restoreDrugs(
+  zipContent: JSZip,
+  ranchId: string
+): Promise<{ added: number; skipped: number; errors: string[] }> {
+  const result = { added: 0, skipped: 0, errors: [] as string[] };
+
+  try {
+    const drugsFile = zipContent.file('drugs.csv');
+    if (!drugsFile) {
+      console.log('No drugs.csv found in backup');
+      return result;
+    }
+
+    const csvContent = await drugsFile.async('string');
+    const lines = csvContent.split('\n').filter(line => line.trim());
+
+    if (lines.length < 2) {
+      return result;
+    }
+
+    const { data: existingDrugs, error: fetchError } = await supabase
+      .from('drugs')
+      .select('id, drug_name')
+      .eq('ranch_id', ranchId);
+
+    if (fetchError) {
+      result.errors.push(`Error fetching existing drugs: ${fetchError.message}`);
+      return result;
+    }
+
+    const existingDrugIds = new Set(existingDrugs?.map(d => d.id) || []);
+    const existingDrugNames = new Set(existingDrugs?.map(d => d.drug_name.toLowerCase()) || []);
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i]);
+
+      const drugId = values[0];
+      const drugName = values[1];
+      const ccsPerPound = values[2] ? parseFloat(values[2]) : null;
+      const fixedDoseMl = values[3] ? parseFloat(values[3]) : null;
+      const notes = values[4] || null;
+
+      if (existingDrugIds.has(drugId) || existingDrugNames.has(drugName.toLowerCase())) {
+        result.skipped++;
+        continue;
+      }
+
+      const { error: insertError } = await supabase
+        .from('drugs')
+        .insert({
+          id: drugId,
+          ranch_id: ranchId,
+          drug_name: drugName,
+          ccs_per_pound: ccsPerPound,
+          fixed_dose_ml: fixedDoseMl,
+          notes: notes,
+        });
+
+      if (insertError) {
+        result.errors.push(`Failed to restore drug "${drugName}": ${insertError.message}`);
+        result.skipped++;
+      } else {
+        result.added++;
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    result.errors.push(`Error restoring drugs: ${errorMessage}`);
+  }
+
+  return result;
+}
+
+async function restoreFences(
+  zipContent: JSZip,
+  ranchId: string
+): Promise<{ added: number; skipped: number; errors: string[] }> {
+  const result = { added: 0, skipped: 0, errors: [] as string[] };
+
+  try {
+    const fencesFile = zipContent.file('fences.csv');
+    if (!fencesFile) {
+      console.log('No fences.csv found in backup');
+      return result;
+    }
+
+    const csvContent = await fencesFile.async('string');
+    const lines = csvContent.split('\n').filter(line => line.trim());
+
+    if (lines.length < 2) {
+      return result;
+    }
+
+    const { data: existingFences, error: fetchError } = await supabase
+      .from('fences')
+      .select('id')
+      .eq('ranch_id', ranchId);
+
+    if (fetchError) {
+      result.errors.push(`Error fetching existing fences: ${fetchError.message}`);
+      return result;
+    }
+
+    const existingFenceIds = new Set(existingFences?.map(f => f.id) || []);
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i]);
+
+      const fenceId = values[0];
+      const description = values[1];
+      const lastCheckedDate = values[2] || null;
+      const lastCheckedBy = values[3] || null;
+
+      if (existingFenceIds.has(fenceId)) {
+        result.skipped++;
+        continue;
+      }
+
+      const { error: insertError } = await supabase
+        .from('fences')
+        .insert({
+          id: fenceId,
+          ranch_id: ranchId,
+          description: description,
+          last_checked_date: lastCheckedDate,
+          last_checked_by: lastCheckedBy,
+        });
+
+      if (insertError) {
+        result.errors.push(`Failed to restore fence "${description}": ${insertError.message}`);
+        result.skipped++;
+      } else {
+        result.added++;
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    result.errors.push(`Error restoring fences: ${errorMessage}`);
+  }
+
+  return result;
 }

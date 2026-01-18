@@ -2,11 +2,33 @@ import JSZip from 'jszip';
 import { supabase } from '../lib/supabase';
 import type { Animal, Injection, CustomField, CustomFieldValue } from '../lib/database.types';
 
+interface Drug {
+  id: string;
+  ranch_id: string;
+  drug_name: string;
+  ccs_per_pound: number | null;
+  fixed_dose_ml: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Fence {
+  id: string;
+  ranch_id: string;
+  description: string;
+  last_checked_date: string | null;
+  last_checked_by: string | null;
+  created_at: string;
+}
+
 interface ComprehensiveBackupData {
   animals: Animal[];
   injections: Injection[];
   customFields: CustomField[];
   customFieldValues: CustomFieldValue[];
+  drugs: Drug[];
+  fences: Fence[];
 }
 
 export async function createComprehensiveBackup(
@@ -17,6 +39,12 @@ export async function createComprehensiveBackup(
 
   const csvContent = await generateComprehensiveCSV(data);
   zip.file('animals_complete_backup.csv', csvContent);
+
+  const drugsCSV = generateDrugsCSV(data.drugs);
+  zip.file('drugs.csv', drugsCSV);
+
+  const fencesCSV = generateFencesCSV(data.fences);
+  zip.file('fences.csv', fencesCSV);
 
   await addPhotosToZip(zip, data.animals, ranchId);
 
@@ -112,6 +140,54 @@ function escapeCSVField(field: string): string {
     return `"${field.replace(/"/g, '""')}"`;
   }
   return field;
+}
+
+function generateDrugsCSV(drugs: Drug[]): string {
+  const headers = [
+    'Drug ID',
+    'Drug Name',
+    'CCs per Pound',
+    'Fixed Dose (mL)',
+    'Notes',
+  ];
+
+  const rows = drugs.map(drug => [
+    drug.id,
+    drug.drug_name || '',
+    drug.ccs_per_pound?.toString() || '',
+    drug.fixed_dose_ml?.toString() || '',
+    drug.notes || '',
+  ]);
+
+  const csvLines = [
+    headers.map(h => escapeCSVField(h)).join(','),
+    ...rows.map(row => row.map(field => escapeCSVField(field?.toString() || '')).join(',')),
+  ];
+
+  return csvLines.join('\n');
+}
+
+function generateFencesCSV(fences: Fence[]): string {
+  const headers = [
+    'Fence ID',
+    'Description',
+    'Last Checked Date',
+    'Last Checked By',
+  ];
+
+  const rows = fences.map(fence => [
+    fence.id,
+    fence.description || '',
+    fence.last_checked_date || '',
+    fence.last_checked_by || '',
+  ]);
+
+  const csvLines = [
+    headers.map(h => escapeCSVField(h)).join(','),
+    ...rows.map(row => row.map(field => escapeCSVField(field?.toString() || '')).join(',')),
+  ];
+
+  return csvLines.join('\n');
 }
 
 async function addPhotosToZip(

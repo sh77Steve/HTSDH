@@ -12,7 +12,7 @@ const TERMS_VERSION = '2.0';
 
 const TERMS_TEXT = `
 HERDINFO - TERMS OF SERVICE AND SOFTWARE LICENSE
-by Amador Software
+by Steve Howard
 
 By using this software, you agree to the following terms:
 

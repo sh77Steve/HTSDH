@@ -52,6 +52,10 @@ export function SettingsPage() {
     medicalHistorySkipped: number;
     customFieldsAdded: number;
     photosRestored: number;
+    drugsAdded: number;
+    drugsSkipped: number;
+    fencesAdded: number;
+    fencesSkipped: number;
     errors: string[];
   } | null>(null);
   const [showRestoreSummary, setShowRestoreSummary] = useState(false);
@@ -591,12 +595,28 @@ export function SettingsPage() {
 
       if (customFieldValsError) throw customFieldValsError;
 
+      const { data: drugs, error: drugsError } = await supabase
+        .from('drugs')
+        .select('*')
+        .eq('ranch_id', currentRanch.id);
+
+      if (drugsError) throw drugsError;
+
+      const { data: fences, error: fencesError } = await supabase
+        .from('fences')
+        .select('*')
+        .eq('ranch_id', currentRanch.id);
+
+      if (fencesError) throw fencesError;
+
       const backupBlob = await createComprehensiveBackup(
         {
           animals: animals || [],
           injections: injections || [],
           customFields: customFieldDefs || [],
           customFieldValues: customFieldVals || [],
+          drugs: drugs || [],
+          fences: fences || [],
         },
         currentRanch.id
       );
@@ -1731,6 +1751,22 @@ export function SettingsPage() {
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-gray-600">Photos Restored</p>
                   <p className="text-2xl font-bold text-green-700">{restoreSummary.photosRestored}</p>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Drugs Added</p>
+                  <p className="text-2xl font-bold text-green-700">{restoreSummary.drugsAdded}</p>
+                </div>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Drugs Skipped</p>
+                  <p className="text-2xl font-bold text-blue-700">{restoreSummary.drugsSkipped}</p>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Fences Added</p>
+                  <p className="text-2xl font-bold text-green-700">{restoreSummary.fencesAdded}</p>
+                </div>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-gray-600">Fences Skipped</p>
+                  <p className="text-2xl font-bold text-blue-700">{restoreSummary.fencesSkipped}</p>
                 </div>
               </div>
 
