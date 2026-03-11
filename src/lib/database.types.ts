@@ -235,7 +235,6 @@ export interface Database {
           is_primary: boolean;
           is_synced: boolean;
           file_size_bytes: number | null;
-          media_type: string;
           created_at: string;
           updated_at: string;
         };
@@ -251,7 +250,6 @@ export interface Database {
           is_primary?: boolean;
           is_synced?: boolean;
           file_size_bytes?: number | null;
-          media_type?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -267,7 +265,6 @@ export interface Database {
           is_primary?: boolean;
           is_synced?: boolean;
           file_size_bytes?: number | null;
-          media_type?: string;
           created_at?: string;
           updated_at?: string;
         };

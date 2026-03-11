@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Edit2, Save, Trash2, FileText, Camera, Trash, Upload, Image as ImageIcon, Syringe } from 'lucide-react';
+import { X, CreditCard as Edit2, Save, Trash2, FileText, Camera, Trash, Upload, Image as ImageIcon, Syringe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalHistoryModal } from './MedicalHistoryModal';
 import { InjectionModal } from './InjectionModal';
@@ -467,7 +467,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
         .from('animal-photos')
         .getPublicUrl(fileName);
 
-      console.log('Inserting to database:', { publicUrl, media_type: isVideo ? 'video' : 'image' });
+      console.log('Inserting to database:', { publicUrl });
 
       const { error: dbError } = await supabase
         .from('animal_photos')
@@ -476,8 +476,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
           ranch_id: animal.ranch_id,
           storage_url: publicUrl,
           is_primary: photos.length === 0,
-          file_size_bytes: file.size,
-          media_type: isVideo ? 'video' : 'image'
+          file_size_bytes: file.size
         });
 
       if (dbError) {
@@ -557,8 +556,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
 
       if (dbError) throw dbError;
 
-      const mediaType = photo.media_type === 'video' ? 'Video' : 'Photo';
-      showToast(`${mediaType} deleted successfully`, 'success');
+      showToast('Photo deleted successfully', 'success');
       await loadPhotos();
 
       if (photos.length <= 1) {
@@ -566,8 +564,7 @@ export function AnimalDetailModal({ animal, onClose, onUpdate, onDelete, allAnim
       }
     } catch (error: any) {
       console.error('Error deleting media:', error);
-      const mediaType = photo.media_type === 'video' ? 'video' : 'photo';
-      showToast(`Failed to delete ${mediaType}: ${error?.message || 'Unknown error'}`, 'error');
+      showToast(`Failed to delete photo: ${error?.message || 'Unknown error'}`, 'error');
     }
   };
 
